@@ -1,0 +1,153 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "diana-help": {
+      "description": "Orquesta /diana.help para exponer sintaxis de comandos, flujo SDD y tutorial operativo de Diana.",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/diana-help.md}"
+    },
+    "diana-new": {
+      "description": "Orquesta /diana.new para inicializar un proyecto Diana nuevo, validar no colision, crear estructura base canonica y registrarlo en projects-knowledge-radar.",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/diana-new.md}"
+    },
+    "diana-ticket": {
+      "description": "Orquesta /diana.ticket para crear tickets de servicio secuenciales en modo standalone o vinculados a un UCC existente.",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/diana-ticket.md}"
+    },
+    "diana-change": {
+      "description": "Orquesta /diana.change para crear UCC secuencial por proyecto y ticket relacionado opcional/automatico con trazabilidad.",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/diana-change.md}"
+    },
+    "diana-integrate": {
+      "description": "Orquesta /diana.integrate para definir perfil de integracion temprano y enlazar artefactos canonicos de Diana con un engine SDD objetivo, generando handoff oficial para SpecKit, OpenSpec u otros frameworks.",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/diana-integrate.md}"
+    },
+    "diana-constitution": {
+      "description": "Orquesta /diana.constitution para generar, validar o regenerar la constitucion Diana desde un archivo de control de cambios (UCC), con soporte de --input y resolucion dinamica por proyecto.",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/diana-constitution.md}"
+    },
+    "diana-skills": {
+      "description": "Orquesta /diana.skills para generar, validar o regenerar skills canonicas por scope y layer, con trazabilidad a fuentes oficiales y mapeo por agentes/engines.",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/diana-skills.md}"
+    },
+    "diana-knowledge": {
+      "description": "Orquesta /diana.knowledge para generar conocimiento local/remoto por topic, scope, type y layer, aplicando barrido canonico y enfoque skills-first.",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/diana-knowledge.md}"
+    },
+    "diana-specify": {
+      "description": "Orquesta /diana.specify para generar, validar o regenerar la especificacion canonica de una iniciativa Diana, usando constitucion + UCC + meta como fuentes primarias, con soporte de --input y resolucion dinamica de iniciativa por proyecto.",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/diana-specify.md}"
+    },
+    "diana-plan": {
+      "description": "Orquesta /diana.plan para generar, validar o regenerar el plan tecnico Diana con base en constitucion y specs, cargando skills y knowledge antes de /speckit.plan.",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/diana-plan.md}"
+    },
+    "diana-tasks": {
+      "description": "Orquesta /diana.tasks para generar, validar o regenerar el backlog canonico Diana a partir de constitucion, especificacion y plan, dejando trazabilidad explicita hacia Speckit.",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/diana-tasks.md}"
+    },
+    "diana-teams": {
+      "description": "Orquesta /diana.teams para definir topologia de trabajo (single-person o multi-team), registrar equipos con scope_primario, y generar configuracion canonica multi-equipo. La topologia debe definirse ANTES de diana.specify, diana.plan y diana.tasks.",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/diana-teams.md}"
+    },
+    "diana-sync": {
+      "description": "Orquesta /diana.sync para reconciliar manualmente el estado de tareas entre features de SpecKit y artefactos Diana global/slices con trazabilidad canonica.",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/diana-sync.md}"
+    }
+  },
+  "command": {
+    "diana.help": {
+      "description": "Centro de ayuda para sintaxis de comandos Diana, flujo SDD y tutorial operativo por etapas.",
+      "template": "{file:.opencode/commands/diana-help.md}",
+      "agent": "diana-help"
+    },
+    "diana.new": {
+      "description": "Inicializa un nuevo proyecto Diana dentro de projects, normaliza prefijo diana-<project>, valida que no exista, crea estructura base y registra el proyecto en projects-knowledge-radar.",
+      "template": "{file:.opencode/commands/diana-new.md}",
+      "agent": "diana-new"
+    },
+    "diana.ticket": {
+      "description": "Crea tickets de servicio canonicos por proyecto con numeracion secuencial automatica, en modo independiente o vinculados a un UCC existente.",
+      "template": "{file:.opencode/commands/diana-ticket.md}",
+      "agent": "diana-ticket"
+    },
+    "diana.change": {
+      "description": "Crea un archivo de control de cambios (UCC) por proyecto, numeracion secuencial automatica y ticket relacionado opcional/automatico con trazabilidad.",
+      "template": "{file:.opencode/commands/diana-change.md}",
+      "agent": "diana-change"
+    },
+    "diana.integrate": {
+      "description": "Define perfil de integracion temprano y genera/valida/regenera el handoff oficial entre Diana y un engine SDD objetivo como SpecKit, OpenSpec o Generic-SDD.",
+      "template": "{file:.opencode/commands/diana-integrate.md}",
+      "agent": "diana-integrate"
+    },
+    "diana.constitution": {
+      "description": "Genera, valida o regenera la constitucion de un proyecto Diana usando como fuente principal el archivo de control de cambios (UCC), con soporte dinamico por proyecto e input explicito.",
+      "template": "{file:.opencode/commands/diana-constitution.md}",
+      "agent": "diana-constitution"
+    },
+    "diana.skills": {
+      "description": "Genera o sincroniza skills canonicas del proyecto Diana a partir de control de cambios, ticket, constitucion y especificaciones. Usalo antes de /diana.knowledge para asegurar cobertura completa.",
+      "template": "{file:.opencode/commands/diana-skills.md}",
+      "agent": "diana-skills"
+    },
+    "diana.knowledge": {
+      "description": "Genera conocimiento profundo para Diana SDK. Usalo cuando necesites investigar un tema y guardarlo como conocimiento local o registrar fuentes remotas.",
+      "template": "{file:.opencode/commands/diana-knowledge.md}",
+      "agent": "diana-knowledge"
+    },
+    "diana.specify": {
+      "description": "Genera, valida o regenera la especificacion canonica de una iniciativa Diana, usando como fuente principal la constitucion del proyecto, el UCC y el meta, enriquecida por skills y knowledge.",
+      "template": "{file:.opencode/commands/diana-specify.md}",
+      "agent": "diana-specify"
+    },
+    "diana.plan": {
+      "description": "Genera, valida o regenera el plan tecnico Diana a partir de constitucion, spec canonica y spec operativa, usando skills y knowledge como contexto obligatorio antes de /speckit.plan.",
+      "template": "{file:.opencode/commands/diana-plan.md}",
+      "agent": "diana-plan"
+    },
+    "diana.tasks": {
+      "description": "Genera, valida o regenera el backlog canonico Diana desde constitucion, especificacion y plan, y lo enlaza con el backlog operativo de Speckit.",
+      "template": "{file:.opencode/commands/diana-tasks.md}",
+      "agent": "diana-tasks"
+    },
+    "diana.teams": {
+      "description": "Orquesta /diana.teams para definir topologia de trabajo (single-person o multi-team), registrar equipos con scope_primario, y generar configuracion canonica multi-equipo.",
+      "template": "{file:.opencode/commands/diana-teams.md}",
+      "agent": "diana-teams"
+    },
+    "diana.sync": {
+      "description": "Reconciliacion manual de estados de tareas entre features de SpecKit y artefactos Diana (slices + backlog global).",
+      "template": "{file:.opencode/commands/diana-sync.md}",
+      "agent": "diana-sync"
+    },
+    "speckit.implement": {
+      "description": "Ejecuta la implementacion de tareas siguiendo el workflow de Speckit SDD.",
+      "template": "{file:.opencode/commands/speckit-implement.md}"
+    },
+    "speckit.plan": {
+      "description": "Genera el plan tecnico de implementacion siguiendo el workflow de Speckit SDD.",
+      "template": "{file:.opencode/commands/speckit-plan.md}"
+    },
+    "speckit.specify": {
+      "description": "Genera la especificacion funcional siguiendo el workflow de Speckit SDD.",
+      "template": "{file:.opencode/commands/speckit-specify.md}"
+    },
+    "speckit.tasks": {
+      "description": "Genera el backlog de tareas siguiendo el workflow de Speckit SDD.",
+      "template": "{file:.opencode/commands/speckit-tasks.md}"
+    }
+  }
+}
