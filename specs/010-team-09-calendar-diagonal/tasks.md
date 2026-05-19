@@ -43,7 +43,7 @@
 | Atributo | Valor |
 |----------|-------|
 | **ID Canonico** | T162 |
-| **Modulo** | `backend/src/modules/strategies/term/termStrategyContract.ts` |
+| **Modulo** | `projects/rest-api/inversions_api/src/modules/strategies/term/termStrategyContract.ts` |
 | **Fase Canonica** | T09-1: Modelado temporal |
 | **Ola Speckit** | Ola 1 — Fundacion |
 | **Dependencias** | Ninguna (modulo fundacional) |
@@ -52,26 +52,26 @@
 | **Prioridad** | Critica — bloquea Ola 1 |
 
 **Descripcion canonica:**
-Definir contrato base Calendar/Diagonal en `backend/src/modules/strategies/term/termStrategyContract.ts` con inputs por pata (strikes, expiraciones cercanas/lejana, primas, contratos), validacion de consistencia temporal y estilo de opcion.
+Definir contrato base Calendar/Diagonal en `projects/rest-api/inversions_api/src/modules/strategies/term/termStrategyContract.ts` con inputs por pata (strikes, expiraciones cercanas/lejana, primas, contratos), validacion de consistencia temporal y estilo de opcion.
 
 **Sub-tareas operativas Speckit:**
 
-- [ ] T162.1 Definir interfaz `TermStrategyInput` con campos:
+- [X] T162.1 Definir interfaz `TermStrategyInput` con campos:
   - `legs: TermLeg[]` (min 2 patas)
   - Cada `TermLeg`: `strike: number`, `expiration: Date` (corta/larga), `premium: number`, `contracts: number`, `optionStyle: 'call' | 'put'`
-- [ ] T162.2 Implementar `TermStrategyContract` class con:
+- [X] T162.2 Implementar `TermStrategyContract` class con:
   - Constructor que acepta y valida `TermStrategyInput`
   - Metodo `validate()` que retorna `ValidationResult` con errores descriptivos
   - Metodo `getType()` que retorna `'calendar' | 'diagonal'` segn los strikes y expiraciones
-- [ ] T162.3 Implementar validaciones de consistencia temporal:
+- [X] T162.3 Implementar validaciones de consistencia temporal:
   - `expirationShort < expirationLong` (obligatorio)
   - Diferencia minima entre expiraciones (configurable, default 7 dias)
   - Misma moneda/base subyacente entre patas
-- [ ] T162.4 Implementar validaciones de estilo de opcion:
+- [X] T162.4 Implementar validaciones de estilo de opcion:
   - Verificar que `optionStyle` sea `'call'` o `'put'`
   - Validar consistencia: Calendar = mismo strike, expiraciones diferentes; Diagonal = strikes diferentes, expiraciones diferentes
-- [ ] T162.5 Implementar manejo de errores con `TermStrategyError` (codigo, mensaje, campo afectado)
-- [ ] T162.6 Escribir tests unitarios para T162 (cobertura >= 80% en validaciones)
+- [X] T162.5 Implementar manejo de errores con `TermStrategyError` (codigo, mensaje, campo afectado)
+- [X] T162.6 Escribir tests unitarios para T162 (cobertura >= 80% en validaciones)
 
 **Criterios de aceptacion:**
 - Valida consistencia temporal (expiracion corta < expiracion larga)
@@ -87,7 +87,7 @@ Definir contrato base Calendar/Diagonal en `backend/src/modules/strategies/term/
 | Atributo | Valor |
 |----------|-------|
 | **ID Canonico** | T163 |
-| **Modulo** | `backend/src/modules/strategies/term/calendarSpreadEngine.ts` |
+| **Modulo** | `projects/rest-api/inversions_api/src/modules/strategies/term/calendarSpreadEngine.ts` |
 | **Fase Canonica** | T09-1: Modelado temporal |
 | **Ola Speckit** | Ola 1 — Fundacion |
 | **Dependencias** | T162 completado |
@@ -96,27 +96,27 @@ Definir contrato base Calendar/Diagonal en `backend/src/modules/strategies/term/
 | **Prioridad** | Alta |
 
 **Descripcion canonica:**
-Implementar core de Calendar Spread (call/put) en `backend/src/modules/strategies/term/calendarSpreadEngine.ts` con modelado de theta, vencimiento corto/largo, impacto de term structure IV y escenarios de precio.
+Implementar core de Calendar Spread (call/put) en `projects/rest-api/inversions_api/src/modules/strategies/term/calendarSpreadEngine.ts` con modelado de theta, vencimiento corto/largo, impacto de term structure IV y escenarios de precio.
 
 **Sub-tareas operativas Speckit:**
 
-- [ ] T163.1 Implementar `CalendarSpreadEngine` class con constructor que recibe `TermStrategyContract` validado
-- [ ] T163.2 Implementar calculo de theta decay:
+- [X] T163.1 Implementar `CalendarSpreadEngine` class con constructor que recibe `TermStrategyContract` validado
+- [X] T163.2 Implementar calculo de theta decay:
   - Theta de la pata corta (vencimiento proximo)
   - Theta de la pata larga (vencimiento lejano)
   - Theta neto = theta corta - theta larga
-- [ ] T163.3 Implementar modelado de vencimiento corto/largo:
+- [X] T163.3 Implementar modelado de vencimiento corto/largo:
   - Descomposicion por dias hasta expiracion (DTE) para cada pata
   - Perfil de theta decay en funcion del DTE
-- [ ] T163.4 Implementar impacto de term structure IV:
+- [X] T163.4 Implementar impacto de term structure IV:
   - Input de curva IV por expiration (skew temporal)
   - Calcular precio Black-Scholes con IV diferenciada por pata
-- [ ] T163.5 Implementar generacion de escenarios de precio:
+- [X] T163.5 Implementar generacion de escenarios de precio:
   - Rango configurable de precio del subyacente
   - Paso de precio configurable
   - Output: `CalendarScenario[]` con precio, valor estrategia, P&L, theta, IV implícita
-- [ ] T163.6 Soportar variantes call y put con parametro `optionStyle`
-- [ ] T163.7 Escribir tests unitarios para T163 (cobertura >= 80%)
+- [X] T163.6 Soportar variantes call y put con parametro `optionStyle`
+- [X] T163.7 Escribir tests unitarios para T163 (cobertura >= 80%)
 
 **Criterios de aceptacion:**
 - Modela theta decay para vencimiento corto y largo
@@ -131,7 +131,7 @@ Implementar core de Calendar Spread (call/put) en `backend/src/modules/strategie
 | Atributo | Valor |
 |----------|-------|
 | **ID Canonico** | T164 |
-| **Modulo** | `backend/src/modules/strategies/term/diagonalSpreadEngine.ts` |
+| **Modulo** | `projects/rest-api/inversions_api/src/modules/strategies/term/diagonalSpreadEngine.ts` |
 | **Fase Canonica** | T09-1: Modelado temporal |
 | **Ola Speckit** | Ola 1 — Fundacion |
 | **Dependencias** | T162 completado |
@@ -140,28 +140,28 @@ Implementar core de Calendar Spread (call/put) en `backend/src/modules/strategie
 | **Prioridad** | Alta |
 
 **Descripcion canonica:**
-Implementar core de Diagonal Spread (call/put) en `backend/src/modules/strategies/term/diagonalSpreadEngine.ts` con combinacion strike+tiempo, sensibilidad de griegas, perfiles de riesgo y ventanas de ajuste.
+Implementar core de Diagonal Spread (call/put) en `projects/rest-api/inversions_api/src/modules/strategies/term/diagonalSpreadEngine.ts` con combinacion strike+tiempo, sensibilidad de griegas, perfiles de riesgo y ventanas de ajuste.
 
 **Sub-tareas operativas Speckit:**
 
-- [ ] T164.1 Implementar `DiagonalSpreadEngine` class con constructor que recibe `TermStrategyContract` validado
-- [ ] T164.2 Implementar combinacion strike diferencial + expiracion diferencial:
+- [X] T164.1 Implementar `DiagonalSpreadEngine` class con constructor que recibe `TermStrategyContract` validado
+- [X] T164.2 Implementar combinacion strike diferencial + expiracion diferencial:
   - Pata corta: strike cercano al dinero (ATM aproximado), expiracion corta
   - Pata larga: strike fuera del dinero (OTM), expiracion larga
   - Validar relacion strike + expiracion
-- [ ] T164.3 Implementar calculo de sensibilidad de griegas:
+- [X] T164.3 Implementar calculo de sensibilidad de griegas:
   - Delta, gamma, theta, vega por pata y neto
   - Identificar perfil direccional (bullish/bearish/neutral)
-- [ ] T164.4 Implementar perfiles de riesgo:
+- [X] T164.4 Implementar perfiles de riesgo:
   - Por escenario de precio del subyacente
   - Por paso del tiempo (decaimiento temporal)
   - Por cambio en IV (vega shock)
-- [ ] T164.5 Implementar identificacion de ventanas de ajuste/roll:
+- [X] T164.5 Implementar identificacion de ventanas de ajuste/roll:
   - Umbral configurable de theta residual
   - Proximidad a expiracion corta
   - Desviacion de perfil de riesgo esperado
-- [ ] T164.6 Soportar variantes call y put con parametro `optionStyle`
-- [ ] T164.7 Escribir tests unitarios para T164 (cobertura >= 80%)
+- [X] T164.6 Soportar variantes call y put con parametro `optionStyle`
+- [X] T164.7 Escribir tests unitarios para T164 (cobertura >= 80%)
 
 **Criterios de aceptacion:**
 - Combina strike diferencial + expiracion diferencial
@@ -181,7 +181,7 @@ Implementar core de Diagonal Spread (call/put) en `backend/src/modules/strategie
 | Atributo | Valor |
 |----------|-------|
 | **ID Canonico** | T165 |
-| **Modulo** | `backend/src/modules/strategies/term/termSimulationEngine.ts` |
+| **Modulo** | `projects/rest-api/inversions_api/src/modules/strategies/term/termSimulationEngine.ts` |
 | **Fase Canonica** | T09-2: Calculo y escenarios |
 | **Ola Speckit** | Ola 2 — Simulacion y Riesgo |
 | **Dependencias** | T163, T164 completados |
@@ -190,29 +190,29 @@ Implementar core de Diagonal Spread (call/put) en `backend/src/modules/strategie
 | **Prioridad** | Alta |
 
 **Descripcion canonica:**
-Implementar motor de simulacion temporal para Calendar/Diagonal en `backend/src/modules/strategies/term/termSimulationEngine.ts` con backtesting, Monte Carlo/escenarios deterministicos y proyeccion de payoff/P&L en tiempo real.
+Implementar motor de simulacion temporal para Calendar/Diagonal en `projects/rest-api/inversions_api/src/modules/strategies/term/termSimulationEngine.ts` con backtesting, Monte Carlo/escenarios deterministicos y proyeccion de payoff/P&L en tiempo real.
 
 **Sub-tareas operativas Speckit:**
 
-- [ ] T165.1 Implementar `TermSimulationEngine` class con soporte para CalendarSpreadEngine y DiagonalSpreadEngine
-- [ ] T165.2 Implementar modo backtesting:
+- [X] T165.1 Implementar `TermSimulationEngine` class con soporte para CalendarSpreadEngine y DiagonalSpreadEngine
+- [X] T165.2 Implementar modo backtesting:
   - Carga de datos historicos de precios (formato OHLC configurable)
   - Iteracion por ventana temporal
   - Calculo de rendimiento historico de la estrategia
-- [ ] T165.3 Implementar simulacion Monte Carlo:
+- [X] T165.3 Implementar simulacion Monte Carlo:
   - Parametros configurables: iteraciones (default 10,000), distribucion (normal, lognormal), semilla
   - Generacion de trayectorias de precio y IV
   - Output: distribucion de P&L, percentiles, VaR
-- [ ] T165.4 Implementar escenarios deterministicos:
+- [X] T165.4 Implementar escenarios deterministicos:
   - Precio fijo en rango
   - Shock de IV (paralelo, por expiration)
   - Paso temporal (DTE decreciente)
-- [ ] T165.5 Implementar proyeccion de payoff y P&L en tiempo real:
+- [X] T165.5 Implementar proyeccion de payoff y P&L en tiempo real:
   - Payoff por escenario
   - P&L acumulado
   - Metricas de rendimiento (Sharpe, Sortino, max drawdown)
-- [ ] T165.6 Implementar formato de salida `SimulationResult` con datos estructurados para consumo por termReportEngine y APIs
-- [ ] T165.7 Escribir tests unitarios para T165 (cobertura >= 80%)
+- [X] T165.6 Implementar formato de salida `SimulationResult` con datos estructurados para consumo por termReportEngine y APIs
+- [X] T165.7 Escribir tests unitarios para T165 (cobertura >= 80%)
 
 **Criterios de aceptacion:**
 - Soporta backtesting con datos historicos
@@ -227,7 +227,7 @@ Implementar motor de simulacion temporal para Calendar/Diagonal en `backend/src/
 | Atributo | Valor |
 |----------|-------|
 | **ID Canonico** | T166 |
-| **Modulo** | `backend/src/modules/strategies/term/termRiskEngine.ts` |
+| **Modulo** | `projects/rest-api/inversions_api/src/modules/strategies/term/termRiskEngine.ts` |
 | **Fase Canonica** | T09-2: Calculo y escenarios |
 | **Ola Speckit** | Ola 2 — Simulacion y Riesgo |
 | **Dependencias** | T165 completado |
@@ -236,27 +236,27 @@ Implementar motor de simulacion temporal para Calendar/Diagonal en `backend/src/
 | **Prioridad** | Alta |
 
 **Descripcion canonica:**
-Implementar Risk Engine Calendar/Diagonal en `backend/src/modules/strategies/term/termRiskEngine.ts` con limites por vencimiento, riesgo de asignacion, reglas de stop-loss y alertas push/email.
+Implementar Risk Engine Calendar/Diagonal en `projects/rest-api/inversions_api/src/modules/strategies/term/termRiskEngine.ts` con limites por vencimiento, riesgo de asignacion, reglas de stop-loss y alertas push/email.
 
 **Sub-tareas operativas Speckit:**
 
-- [ ] T166.1 Implementar `TermRiskEngine` class con configuracion de limites:
+- [X] T166.1 Implementar `TermRiskEngine` class con configuracion de limites:
   - Limite de concentracion por vencimiento (max % del portafolio)
   - Limite de fecha maxima de expiracion
   - Limite de theta negativo maximo
-- [ ] T166.2 Implementar calculo de riesgo de asignacion temprana:
+- [X] T166.2 Implementar calculo de riesgo de asignacion temprana:
   - Deteccion de opciones ITM profundas en pata corta
   - Probabilidad de asignacion temprana (dividendos, tasa, tiempo restante)
-- [ ] T166.3 Implementar reglas de stop-loss:
+- [X] T166.3 Implementar reglas de stop-loss:
   - Stop-loss fijo (perdida maxima absoluta)
   - Stop-loss porcentual (% del capital asignado)
   - Stop-loss trailing (por theta decay)
   - Notificacion/configuracion de auto-liquidacion (solo sugerida, RNF-001)
-- [ ] T166.4 Implementar sistema de alertas:
+- [X] T166.4 Implementar sistema de alertas:
   - Alertas push (evento en memoria para consumo por orchestrator)
   - Alertas email (formato estructurado con resumen de riesgo)
   - Umbrales configurables por tipo de alerta
-- [ ] T166.5 Escribir tests unitarios para T166 (cobertura >= 80%)
+- [X] T166.5 Escribir tests unitarios para T166 (cobertura >= 80%)
 
 **Criterios de aceptacion:**
 - Aplica limites por vencimiento (max fecha, concentracion)
@@ -271,7 +271,7 @@ Implementar Risk Engine Calendar/Diagonal en `backend/src/modules/strategies/ter
 | Atributo | Valor |
 |----------|-------|
 | **ID Canonico** | T169 |
-| **Modulo** | `backend/src/modules/strategies/term/termRollOrchestrator.ts` |
+| **Modulo** | `projects/rest-api/inversions_api/src/modules/strategies/term/termRollOrchestrator.ts` |
 | **Fase Canonica** | T09-2: Calculo y escenarios |
 | **Ola Speckit** | Ola 3 — Orquestacion y Exposicion |
 | **Dependencias** | T166 completado |
@@ -280,30 +280,30 @@ Implementar Risk Engine Calendar/Diagonal en `backend/src/modules/strategies/ter
 | **Prioridad** | Media |
 
 **Descripcion canonica:**
-Implementar orquestador de gestion temporal en `backend/src/modules/strategies/term/termRollOrchestrator.ts` para reglas de roll/ajuste, cierre anticipado y control de deterioro temporal.
+Implementar orquestador de gestion temporal en `projects/rest-api/inversions_api/src/modules/strategies/term/termRollOrchestrator.ts` para reglas de roll/ajuste, cierre anticipado y control de deterioro temporal.
 
 **Sub-tareas operativas Speckit:**
 
-- [ ] T169.1 Implementar `TermRollOrchestrator` class con configuracion de calendario de roll:
+- [X] T169.1 Implementar `TermRollOrchestrator` class con configuracion de calendario de roll:
   - Fechas programadas de roll (D-{X} antes de expiracion corta)
   - Periodicidad configurable (calendar-based vs trigger-based)
-- [ ] T169.2 Implementar evaluacion de triggers de ajuste:
+- [X] T169.2 Implementar evaluacion de triggers de ajuste:
   - Umbral de theta residual (cuando theta < umbral, considerar roll)
   - Umbral de gamma/vega exposure
   - Proximidad a expiracion corta (DTE minimo)
   - Violacion de limites de riesgo (desde termRiskEngine)
-- [ ] T169.3 Implementar calculo de costos de roll:
+- [X] T169.3 Implementar calculo de costos de roll:
   - Diferencial de primas entre pata saliente y nueva pata
   - Costos de transaccion estimados
   - Impacto en perfil de riesgo post-roll
-- [ ] T169.4 Implementar recomendacion de cierre anticipado:
+- [X] T169.4 Implementar recomendacion de cierre anticipado:
   - Cuando riesgo residual supera beneficio potencial
   - Cuando condicion de mercado invalida la tesis original
   - Output: `RollRecommendation` con justificacion estructurada
-- [ ] T169.5 Implementar control de deterioro temporal con metrica theta residual:
+- [X] T169.5 Implementar control de deterioro temporal con metrica theta residual:
   - Monitoreo continuo de theta decay
   - Alerta cuando theta residual < umbral critico
-- [ ] T169.6 Escribir tests unitarios para T169 (cobertura >= 80%)
+- [X] T169.6 Escribir tests unitarios para T169 (cobertura >= 80%)
 
 **Criterios de aceptacion:**
 - Ejecuta reglas de roll programadas por calendario
@@ -323,7 +323,7 @@ Implementar orquestador de gestion temporal en `backend/src/modules/strategies/t
 | Atributo | Valor |
 |----------|-------|
 | **ID Canonico** | T167 |
-| **Modulo** | `backend/src/modules/strategies/term/termReportEngine.ts` |
+| **Modulo** | `projects/rest-api/inversions_api/src/modules/strategies/term/termReportEngine.ts` |
 | **Fase Canonica** | T09-3: Chat IA y API |
 | **Ola Speckit** | Ola 3 — Orquestacion y Exposicion |
 | **Dependencias** | T165 completado |
@@ -332,30 +332,30 @@ Implementar orquestador de gestion temporal en `backend/src/modules/strategies/t
 | **Prioridad** | Media |
 
 **Descripcion canonica:**
-Implementar modulo de visualizacion y reporting Calendar/Diagonal en `backend/src/modules/strategies/term/termReportEngine.ts` con curvas de payoff, superficies tiempo-precio-IV y metricas riesgo/beneficio auditables.
+Implementar modulo de visualizacion y reporting Calendar/Diagonal en `projects/rest-api/inversions_api/src/modules/strategies/term/termReportEngine.ts` con curvas de payoff, superficies tiempo-precio-IV y metricas riesgo/beneficio auditables.
 
 **Sub-tareas operativas Speckit:**
 
-- [ ] T167.1 Implementar `TermReportEngine` class que consume `SimulationResult` y genera reportes estructurados
-- [ ] T167.2 Implementar generacion de curvas de payoff:
+- [X] T167.1 Implementar `TermReportEngine` class que consume `SimulationResult` y genera reportes estructurados
+- [X] T167.2 Implementar generacion de curvas de payoff:
   - Para Calendar Spread (call/put)
   - Para Diagonal Spread (call/put)
   - Formato: array de puntos `{price, payoff, pnl}` para graficacion
-- [ ] T167.3 Implementar superficies tiempo-precio-IV:
+- [X] T167.3 Implementar superficies tiempo-precio-IV:
   - Eje X: precio del subyacente
   - Eje Y: DTE restante
   - Eje Z: P&L / IV implicita
   - Formato: matriz 2D para visualizacion
-- [ ] T167.4 Implementar metricas riesgo/beneficio auditables:
+- [X] T167.4 Implementar metricas riesgo/beneficio auditables:
   - Theta, gamma, vega, delta neto
   - Probabilidad de profit (POP)
   - Max drawdown esperado
   - Sharpe ratio estimado
   - Formato JSON + resumen textual
-- [ ] T167.5 Implementar exportacion de datos para TEAM-01 (dashboard):
+- [X] T167.5 Implementar exportacion de datos para TEAM-01 (dashboard):
   - Formato JSON estandarizado
   - Endpoint interno de consumo
-- [ ] T167.6 Escribir tests unitarios para T167 (cobertura >= 80%)
+- [X] T167.6 Escribir tests unitarios para T167 (cobertura >= 80%)
 
 **Criterios de aceptacion:**
 - Genera curvas de payoff para ambas estrategias
@@ -370,7 +370,7 @@ Implementar modulo de visualizacion y reporting Calendar/Diagonal en `backend/sr
 | Atributo | Valor |
 |----------|-------|
 | **ID Canonico** | T168 |
-| **Modulos** | `backend/src/routes/strategies/term/calendarSpread.ts`, `backend/src/routes/strategies/term/diagonalSpread.ts`, `backend/src/routes/strategies/term/termComparator.ts` |
+| **Modulos** | `projects/rest-api/inversions_api/src/routes/strategies/term/calendarSpread.ts`, `projects/rest-api/inversions_api/src/routes/strategies/term/diagonalSpread.ts`, `projects/rest-api/inversions_api/src/routes/strategies/term/termComparator.ts` |
 | **Fase Canonica** | T09-3: Chat IA y API |
 | **Ola Speckit** | Ola 3 — Orquestacion y Exposicion |
 | **Dependencias** | T163, T164, T165, T167 completados |
@@ -379,26 +379,26 @@ Implementar modulo de visualizacion y reporting Calendar/Diagonal en `backend/sr
 | **Prioridad** | Alta |
 
 **Descripcion canonica:**
-Implementar APIs dedicadas y comparador Calendar vs Diagonal en `backend/src/routes/strategies/term/` (calendarSpread.ts, diagonalSpread.ts, termComparator.ts) para recomendar estrategia segun contexto multi-core.
+Implementar APIs dedicadas y comparador Calendar vs Diagonal en `projects/rest-api/inversions_api/src/routes/strategies/term/` (calendarSpread.ts, diagonalSpread.ts, termComparator.ts) para recomendar estrategia segun contexto multi-core.
 
 **Sub-tareas operativas Speckit:**
 
-- [ ] T168.1 Implementar endpoint `POST /api/v1/strategies/term/calendar`:
+- [X] T168.1 Implementar endpoint `POST /api/v1/strategies/term/calendar`:
   - Input: `CalendarRequest` (strikes, expiraciones, primas, contratos, escenarios)
   - Output: `CalendarResponse` (payoff, griegas, escenarios, perfil de riesgo)
   - Integracion con CalendarSpreadEngine + TermSimulationEngine
-- [ ] T168.2 Implementar endpoint `POST /api/v1/strategies/term/diagonal`:
+- [X] T168.2 Implementar endpoint `POST /api/v1/strategies/term/diagonal`:
   - Input: `DiagonalRequest` (strikes, expiraciones, primas, contratos, escenarios)
   - Output: `DiagonalResponse` (payoff, griegas, escenarios, perfil de riesgo)
   - Integracion con DiagonalSpreadEngine + TermSimulationEngine
-- [ ] T168.3 Implementar endpoint `POST /api/v1/strategies/term/compare`:
+- [X] T168.3 Implementar endpoint `POST /api/v1/strategies/term/compare`:
   - Input: `CompareRequest` (parametros de mercado, perfil de riesgo, horizonte)
   - Output: `CompareResponse` (recomendacion Calendar vs Diagonal, justificacion, metricas comparativas)
   - Logica de recomendacion segun contexto multi-core (volatilidad, tiempo, direccion)
-- [ ] T168.4 Implementar validacion de requests con esquemas JSON (Joi/Zod)
-- [ ] T168.5 Implementar manejo de errores estandar (HTTP codes, mensajes descriptivos)
-- [ ] T168.6 Generar documentacion OpenAPI/Swagger para los 3 endpoints
-- [ ] T168.7 Escribir tests de integracion para T168 (T198) (cobertura >= 80%)
+- [X] T168.4 Implementar validacion de requests con esquemas JSON (Joi/Zod)
+- [X] T168.5 Implementar manejo de errores estandar (HTTP codes, mensajes descriptivos)
+- [X] T168.6 Generar documentacion OpenAPI/Swagger para los 3 endpoints
+- [X] T168.7 Escribir tests de integracion para T168 (T198) (cobertura >= 80%)
 
 **Criterios de aceptacion:**
 - API REST con respuestas JSON estructuradas
@@ -414,7 +414,7 @@ Implementar APIs dedicadas y comparador Calendar vs Diagonal en `backend/src/rou
 | Atributo | Valor |
 |----------|-------|
 | **ID Local** | S-T09-C01 |
-| **Modulo** | `backend/src/modules/strategies/term/termChatAssistant.ts` |
+| **Modulo** | `projects/rest-api/inversions_api/src/modules/strategies/term/termChatAssistant.ts` |
 | **Fase Canonica** | T09-3: Chat IA y API |
 | **Ola Speckit** | Ola 3 — Orquestacion y Exposicion |
 | **Dependencias** | T163, T164, T165 completados |
@@ -427,16 +427,16 @@ Integrar Chat IA para explicar el proposito, riesgo y condiciones de uso de cada
 
 **Sub-tareas operativas Speckit:**
 
-- [ ] S-T09-C01.1 Implementar `TermChatAssistant` class con contexto de estrategia temporal
-- [ ] S-T09-C01.2 Implementar generacion de narrativa explicativa:
+- [X] S-T09-C01.1 Implementar `TermChatAssistant` class con contexto de estrategia temporal
+- [X] S-T09-C01.2 Implementar generacion de narrativa explicativa:
   - Proposito de la estructura temporal seleccionada
   - Perfil de riesgo (theta, gamma, vega)
   - Condiciones de uso (mercado tendencial, lateral, volatil)
-- [ ] S-T09-C01.3 Integrar con motores CalendarSpreadEngine y DiagonalSpreadEngine para contexto en vivo
-- [ ] S-T09-C01.4 Integrar con TermSimulationEngine para escenarios actuales
-- [ ] S-T09-C01.5 Implementar safeguard RNF-001: disclaimer de no-asesoramiento en toda salida
-- [ ] S-T09-C01.6 Implementar formato de salida estructurado (texto + metricas clave)
-- [ ] S-T09-C01.7 Escribir tests unitarios para S-T09-C01 (cobertura >= 80%)
+- [X] S-T09-C01.3 Integrar con motores CalendarSpreadEngine y DiagonalSpreadEngine para contexto en vivo
+- [X] S-T09-C01.4 Integrar con TermSimulationEngine para escenarios actuales
+- [X] S-T09-C01.5 Implementar safeguard RNF-001: disclaimer de no-asesoramiento en toda salida
+- [X] S-T09-C01.6 Implementar formato de salida estructurado (texto + metricas clave)
+- [X] S-T09-C01.7 Escribir tests unitarios para S-T09-C01 (cobertura >= 80%)
 
 **Criterios de aceptacion:**
 - Explica proposito de la estructura temporal seleccionada
@@ -458,7 +458,7 @@ Integrar Chat IA para explicar el proposito, riesgo y condiciones de uso de cada
 | **ID Canonico** | T196 |
 | **Tipo** | Unitario |
 | **Modulos bajo prueba** | `calendarSpreadEngine.ts`, `diagonalSpreadEngine.ts` |
-| **Archivo destino** | `tests/unit/strategies/term/test_calendarSpreadEngine.ts`, `tests/unit/strategies/term/test_diagonalSpreadEngine.ts` |
+| **Archivo destino** | `tests/unit/strategies/term/calendarSpreadEngine.test.ts`, `tests/unit/strategies/term/diagonalSpreadEngine.test.ts` |
 | **Ola Speckit** | Ola 4 — Calidad y Cierre |
 | **Dependencias** | T163, T164 completados |
 | **Estimacion** | 1 unidad de desarrollo |
@@ -466,13 +466,13 @@ Integrar Chat IA para explicar el proposito, riesgo y condiciones de uso de cada
 
 **Sub-tareas operativas Speckit:**
 
-- [ ] T196.1 Test unitario: CalendarSpreadEngine — calculo de theta decay correcto para call/put
-- [ ] T196.2 Test unitario: CalendarSpreadEngine — impacto de term structure IV
-- [ ] T196.3 Test unitario: CalendarSpreadEngine — escenarios de precio
-- [ ] T196.4 Test unitario: DiagonalSpreadEngine — combinacion strike+expiracion
-- [ ] T196.5 Test unitario: DiagonalSpreadEngine — sensibilidad de griegas
-- [ ] T196.6 Test unitario: DiagonalSpreadEngine — ventanas de ajuste
-- [ ] T196.7 Test unitario: Ambos engines — manejo de errores y casos borde
+- [X] T196.1 Test unitario: CalendarSpreadEngine — calculo de theta decay correcto para call/put
+- [X] T196.2 Test unitario: CalendarSpreadEngine — impacto de term structure IV
+- [X] T196.3 Test unitario: CalendarSpreadEngine — escenarios de precio
+- [X] T196.4 Test unitario: DiagonalSpreadEngine — combinacion strike+expiracion
+- [X] T196.5 Test unitario: DiagonalSpreadEngine — sensibilidad de griegas
+- [X] T196.6 Test unitario: DiagonalSpreadEngine — ventanas de ajuste
+- [X] T196.7 Test unitario: Ambos engines — manejo de errores y casos borde
 
 **Cobertura minima requerida**: 80% en rutas criticas
 
@@ -485,7 +485,7 @@ Integrar Chat IA para explicar el proposito, riesgo y condiciones de uso de cada
 | **ID Canonico** | T197 |
 | **Tipo** | Unitario |
 | **Modulos bajo prueba** | `termSimulationEngine.ts`, `termRollOrchestrator.ts` |
-| **Archivo destino** | `tests/unit/strategies/term/test_termSimulationEngine.ts`, `tests/unit/strategies/term/test_termRollOrchestrator.ts` |
+| **Archivo destino** | `tests/unit/strategies/term/termSimulationEngine.test.ts`, `tests/unit/strategies/term/termRollOrchestrator.test.ts` |
 | **Ola Speckit** | Ola 4 — Calidad y Cierre |
 | **Dependencias** | T165, T169 completados |
 | **Estimacion** | 1 unidad de desarrollo |
@@ -493,14 +493,14 @@ Integrar Chat IA para explicar el proposito, riesgo y condiciones de uso de cada
 
 **Sub-tareas operativas Speckit:**
 
-- [ ] T197.1 Test unitario: TermSimulationEngine — backtesting con datos mock
-- [ ] T197.2 Test unitario: TermSimulationEngine — Monte Carlo con parametros configurables
-- [ ] T197.3 Test unitario: TermSimulationEngine — escenarios deterministicos
-- [ ] T197.4 Test unitario: TermSimulationEngine — proyeccion de payoff/P&L
-- [ ] T197.5 Test unitario: TermRollOrchestrator — reglas de roll programadas
-- [ ] T197.6 Test unitario: TermRollOrchestrator — triggers de ajuste
-- [ ] T197.7 Test unitario: TermRollOrchestrator — costos de roll y cierre anticipado
-- [ ] T197.8 Test unitario: Ambos modulos — manejo de errores y casos borde
+- [X] T197.1 Test unitario: TermSimulationEngine — backtesting con datos mock
+- [X] T197.2 Test unitario: TermSimulationEngine — Monte Carlo con parametros configurables
+- [X] T197.3 Test unitario: TermSimulationEngine — escenarios deterministicos
+- [X] T197.4 Test unitario: TermSimulationEngine — proyeccion de payoff/P&L
+- [X] T197.5 Test unitario: TermRollOrchestrator — reglas de roll programadas
+- [X] T197.6 Test unitario: TermRollOrchestrator — triggers de ajuste
+- [X] T197.7 Test unitario: TermRollOrchestrator — costos de roll y cierre anticipado
+- [X] T197.8 Test unitario: Ambos modulos — manejo de errores y casos borde
 
 **Cobertura minima requerida**: 80% en rutas criticas
 
@@ -513,7 +513,7 @@ Integrar Chat IA para explicar el proposito, riesgo y condiciones de uso de cada
 | **ID Canonico** | T198 |
 | **Tipo** | Integracion |
 | **Modulos bajo prueba** | `routes/strategies/term/calendarSpread.ts`, `routes/strategies/term/diagonalSpread.ts`, `routes/strategies/term/termComparator.ts` |
-| **Archivo destino** | `tests/integration/strategies/term/test_calendarSpread.ts`, `tests/integration/strategies/term/test_diagonalSpread.ts`, `tests/integration/strategies/term/test_termComparator.ts` |
+| **Archivo destino** | `tests/integration/strategies/term/termRoutes.test.ts` (consolidado) |
 | **Ola Speckit** | Ola 4 — Calidad y Cierre |
 | **Dependencias** | T168 completado |
 | **Estimacion** | 1 unidad de desarrollo |
@@ -521,13 +521,13 @@ Integrar Chat IA para explicar el proposito, riesgo y condiciones de uso de cada
 
 **Sub-tareas operativas Speckit:**
 
-- [ ] T198.1 Test integracion: POST `/api/v1/strategies/term/calendar` — flujo completo
-- [ ] T198.2 Test integracion: POST `/api/v1/strategies/term/calendar` — validacion de errores
-- [ ] T198.3 Test integracion: POST `/api/v1/strategies/term/diagonal` — flujo completo
-- [ ] T198.4 Test integracion: POST `/api/v1/strategies/term/diagonal` — validacion de errores
-- [ ] T198.5 Test integracion: POST `/api/v1/strategies/term/compare` — recomendacion Calendar
-- [ ] T198.6 Test integracion: POST `/api/v1/strategies/term/compare` — recomendacion Diagonal
-- [ ] T198.7 Test integracion: POST `/api/v1/strategies/term/compare` — casos borde
+- [X] T198.1 Test integracion: POST `/api/v1/strategies/term/calendar` — flujo completo
+- [X] T198.2 Test integracion: POST `/api/v1/strategies/term/calendar` — validacion de errores
+- [X] T198.3 Test integracion: POST `/api/v1/strategies/term/diagonal` — flujo completo
+- [X] T198.4 Test integracion: POST `/api/v1/strategies/term/diagonal` — validacion de errores
+- [X] T198.5 Test integracion: POST `/api/v1/strategies/term/compare` — recomendacion Calendar
+- [X] T198.6 Test integracion: POST `/api/v1/strategies/term/compare` — recomendacion Diagonal
+- [X] T198.7 Test integracion: POST `/api/v1/strategies/term/compare` — casos borde
 
 **Cobertura minima requerida**: 80% en rutas criticas
 
@@ -538,7 +538,7 @@ Integrar Chat IA para explicar el proposito, riesgo y condiciones de uso de cada
 | Atributo | Valor |
 |----------|-------|
 | **ID Canonico** | T177 |
-| **Alcance** | `backend/src/modules/strategies/term/` (calendar/diagonal) |
+| **Alcance** | `projects/rest-api/inversions_api/src/modules/strategies/term/` (calendar/diagonal) |
 | **Fase Canonica** | T09-4: Validacion |
 | **Ola Speckit** | Ola 4 — Calidad y Cierre |
 | **Dependencias** | T162-T169, S-T09-C01 completados |
@@ -546,16 +546,16 @@ Integrar Chat IA para explicar el proposito, riesgo y condiciones de uso de cada
 | **Prioridad** | Media |
 
 **Descripcion canonica:**
-Ejecutar ajuste de TEAM-09 al estandar transversal en `backend/src/modules/strategies/term/` (calendar/diagonal).
+Ejecutar ajuste de TEAM-09 al estandar transversal en `projects/rest-api/inversions_api/src/modules/strategies/term/` (calendar/diagonal).
 
 **Sub-tareas operativas Speckit:**
 
-- [ ] T177.1 Verificar naming consistente con estandar transversal (`camelCase` para modulos, `PascalCase` para clases/interfaces)
-- [ ] T177.2 Verificar estructura de archivos consistente con el resto de equipos (modulos en `src/modules/strategies/term/`, routes en `src/routes/strategies/term/`)
-- [ ] T177.3 Verificar patron de manejo de errores consistente (clases `Error` con codigo y mensaje)
-- [ ] T177.4 Verificar patron de integracion: contratos de entrada/salida estandarizados
-- [ ] T177.5 Verificar documentacion minima (JSDoc/TSDoc en interfaces publicas)
-- [ ] T177.6 Verificar compliance con RNF-005 (contratos estables de integracion)
+- [X] T177.1 Verificar naming consistente con estandar transversal (`camelCase` para modulos, `PascalCase` para clases/interfaces)
+- [X] T177.2 Verificar estructura de archivos consistente con el resto de equipos (modulos en `src/modules/strategies/term/`, routes en `src/routes/strategies/term/`)
+- [X] T177.3 Verificar patron de manejo de errores consistente (clases `Error` con codigo y mensaje)
+- [X] T177.4 Verificar patron de integracion: contratos de entrada/salida estandarizados
+- [X] T177.5 Verificar documentacion minima (JSDoc/TSDoc en interfaces publicas)
+- [X] T177.6 Verificar compliance con RNF-005 (contratos estables de integracion)
 
 **Criterios de aceptacion:**
 - Consistencia de naming, estructura de archivos, manejo de errores y patrones de integracion con el resto de los equipos
@@ -710,7 +710,7 @@ T162 (termStrategyContract)
 - [x] Grafo de dependencias y oleadas definido
 - [x] Required skills verificadas sin gaps
 - [x] Cobertura canonica validada (preserved: 21, expanded: 12, merged: 1, dropped: 0)
-- [ ] Pendiente: Ejecutar `/diana.integrate action="run" engine="speckit" run_only="implement"` para iniciar implementacion Speckit
+- [X] Pendiente: Ejecutar `/diana.integrate action="run" engine="speckit" run_only="implement"` para iniciar implementacion Speckit
 - [ ] Pendiente: Resolver G-T09-01 antes de Ola 1
 - [ ] Pendiente: Resolver G-T09-02 antes de T169
 - [ ] Pendiente: Resolver G-T09-03 antes de T167/T168
