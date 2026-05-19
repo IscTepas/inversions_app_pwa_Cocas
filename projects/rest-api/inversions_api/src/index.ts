@@ -20,6 +20,9 @@ import { instrumentsCatalogRouter } from "./routes/catalogs/instruments";
 import { brokerCapabilitiesRouter } from "./routes/brokers/capabilities";
 import { marketDataOhlcRouter } from "./routes/market-data/ohlc";
 import { indicatorsCatalogRouter } from "./routes/indicators/catalog";
+import { calendarSpreadRouter } from "./routes/strategies/term/calendarSpread";
+import { diagonalSpreadRouter } from "./routes/strategies/term/diagonalSpread";
+import { termComparatorRouter } from "./routes/strategies/term/termComparator";
 
 const envValidation = validateEnvironment();
 if (!envValidation.isValid) {
@@ -55,6 +58,9 @@ app.use("/api/catalogs", instrumentsCatalogRouter);
 app.use("/api/brokers", brokerCapabilitiesRouter);
 app.use("/api/market-data", marketDataOhlcRouter);
 app.use("/api/indicators", indicatorsCatalogRouter);
+app.use("/api/v1/strategies/term", calendarSpreadRouter);
+app.use("/api/v1/strategies/term", diagonalSpreadRouter);
+app.use("/api/v1/strategies/term", termComparatorRouter);
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });

@@ -1,0 +1,227 @@
+import { describe, it, expect } from "vitest";
+import {
+  TermStrategyContract,
+  TermStrategyError,
+  type TermStrategyInput,
+  type ValidationResult,
+} from "../../../../src/modules/strategies/term/termStrategyContract";
+
+function makeInput(overrides?: Partial<TermStrategyInput>): TermStrategyInput {
+  return {
+    legs: [
+      { strike: 100, expiration: new Date("2026-06-15"), premium: 5.0, contracts: 1, optionStyle: "call" },
+      { strike: 100, expiration: new Date("2026-09-15"), premium: 8.0, contracts: 1, optionStyle: "call" },
+    ],
+    underlying: "SPY",
+    ...overrides,
+  };
+}
+
+describe("TermStrategyContract", () => {
+  describe("constructor", () => {
+    it("should accept valid calendar spread input", () => {
+      const contract = new TermStrategyContract(makeInput());
+      expect(contract).toBeInstanceOf(TermStrategyContract);
+    });
+
+    it("should accept valid diagonal spread input", () => {
+      const input = makeInput({ legs: [
+        { strike: 95, expiration: new Date("2026-06-15"), premium: 5.0, contracts: 1, optionStyle: "call" },
+        { strike: 105, expiration: new Date("2026-09-15"), premium: 8.0, contracts: 1, optionStyle: "call" },
+      ]});
+      const contract = new TermStrategyContract(input);
+      expect(contract).toBeInstanceOf(TermStrategyContract);
+    });
+  });
+
+  describe("validate", () => {
+    it("should return isValid=true for valid calendar spread", () => {
+      const contract = new TermStrategyContract(makeInput());
+      const result = contract.validate();
+      expect(result.isValid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it("should return isValid=true for valid diagonal spread", () => {
+      const input = makeInput({ legs: [
+        { strike: 95, expiration: new Date("2026-06-15"), premium: 5.0, contracts: 1, optionStyle: "call" },
+        { strike: 105, expiration: new Date("2026-09-15"), premium: 8.0, contracts: 1, optionStyle: "call" },
+      ]});
+      const contract = new TermStrategyContract(input);
+      const result = contract.validate();
+      expect(result.isValid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it("should reject input with fewer than 2 legs", () => {
+      const contract = new TermStrategyContract(makeInput({ legs: [
+        { strike: 100, expiration: new Date("2026-06-15"), premium: 5.0, contracts: 1, optionStyle: "call" },
+      ]}));
+      const result = contract.validate();
+      expect(result.isValid).toBe(false);
+      expect(result.errors.some(e => e.code === "INSUFFICIENT_LEGS")).toBe(true);
+    });
+
+    it("should reject input with empty legs", () => {
+      const contract = new TermStrategyContract(makeInput({ legs: [] }));
+      const result = contract.validate();
+      expect(result.isValid).toBe(false);
+      expect(result.errors.some(e => e.code === "INSUFFICIENT_LEGS")).toBe(true);
+    });
+
+    it("should reject input with null legs", () => {
+      const contract = new TermStrategyContract(makeInput({ legs: undefined as any }));
+      const result = contract.validate();
+      expect(result.isValid).toBe(false);
+      expect(result.errors.some(e => e.code === "INSUFFICIENT_LEGS")).toBe(true);
+    });
+
+    it("should reject when all legs have the same expiration (no time spread)", () => {
+      const contract = new TermStrategyContract(makeInput({ legs: [
+        { strike: 100, expiration: new Date("2026-06-15"), premium: 5.0, contracts: 1, optionStyle: "call" },
+        { strike: 100, expiration: new Date("2026-06-15"), premium: 8.0, contracts: 1, optionStyle: "call" },
+      ]}));
+      const result = contract.validate();
+      expect(result.isValid).toBe(false);
+      expect(result.errors.some(e => e.code === "INVALID_CONFIGURATION")).toBe(true);
+    });
+
+    it("should reject when expiration difference is less than 7 days", () => {
+      const contract = new TermStrategyContract(makeInput({ legs: [
+        { strike: 100, expiration: new Date("2026-06-15"), premium: 5.0, contracts: 1, optionStyle: "call" },
+        { strike: 100, expiration: new Date("2026-06-18"), premium: 8.0, contracts: 1, optionStyle: "call" },
+      ]}));
+      const result = contract.validate();
+      expect(result.isValid).toBe(false);
+      expect(result.errors.some(e => e.code === "TEMPORAL_INCONSISTENCY")).toBe(true);
+    });
+
+    it("should reject invalid option style", () => {
+      const contract = new TermStrategyContract(makeInput({ legs: [
+        { strike: 100, expiration: new Date("2026-06-15"), premium: 5.0, contracts: 1, optionStyle: "invalid" as any },
+        { strike: 100, expiration: new Date("2026-09-15"), premium: 8.0, contracts: 1, optionStyle: "call" },
+      ]}));
+      const result = contract.validate();
+      expect(result.isValid).toBe(false);
+      expect(result.errors.some(e => e.code === "INVALID_OPTION_STYLE")).toBe(true);
+    });
+
+    it("should reject mixed call and put legs", () => {
+      const contract = new TermStrategyContract(makeInput({ legs: [
+        { strike: 100, expiration: new Date("2026-06-15"), premium: 5.0, contracts: 1, optionStyle: "call" },
+        { strike: 100, expiration: new Date("2026-09-15"), premium: 8.0, contracts: 1, optionStyle: "put" },
+      ]}));
+      const result = contract.validate();
+      expect(result.isValid).toBe(false);
+      expect(result.errors.some(e => e.code === "INVALID_CONFIGURATION")).toBe(true);
+    });
+
+    it("should reject negative premium", () => {
+      const contract = new TermStrategyContract(makeInput({ legs: [
+        { strike: 100, expiration: new Date("2026-06-15"), premium: -5.0, contracts: 1, optionStyle: "call" },
+        { strike: 100, expiration: new Date("2026-09-15"), premium: 8.0, contracts: 1, optionStyle: "call" },
+      ]}));
+      const result = contract.validate();
+      expect(result.isValid).toBe(false);
+      expect(result.errors.some(e => e.code === "INVALID_CONFIGURATION")).toBe(true);
+    });
+
+    it("should reject non-positive strike", () => {
+      const contract = new TermStrategyContract(makeInput({ legs: [
+        { strike: 0, expiration: new Date("2026-06-15"), premium: 5.0, contracts: 1, optionStyle: "call" },
+        { strike: 100, expiration: new Date("2026-09-15"), premium: 8.0, contracts: 1, optionStyle: "call" },
+      ]}));
+      const result = contract.validate();
+      expect(result.isValid).toBe(false);
+    });
+
+    it("should reject non-positive contracts", () => {
+      const contract = new TermStrategyContract(makeInput({ legs: [
+        { strike: 100, expiration: new Date("2026-06-15"), premium: 5.0, contracts: 0, optionStyle: "call" },
+        { strike: 100, expiration: new Date("2026-09-15"), premium: 8.0, contracts: 1, optionStyle: "call" },
+      ]}));
+      const result = contract.validate();
+      expect(result.isValid).toBe(false);
+    });
+
+    it("should reject same strike and same expiration (not a spread)", () => {
+      const contract = new TermStrategyContract(makeInput({ legs: [
+        { strike: 100, expiration: new Date("2026-06-15"), premium: 5.0, contracts: 1, optionStyle: "call" },
+        { strike: 100, expiration: new Date("2026-06-15"), premium: 8.0, contracts: 1, optionStyle: "call" },
+      ]}));
+      const result = contract.validate();
+      expect(result.isValid).toBe(false);
+    });
+
+    it("should reject different strikes with same expiration (vertical spread)", () => {
+      const contract = new TermStrategyContract(makeInput({ legs: [
+        { strike: 95, expiration: new Date("2026-06-15"), premium: 5.0, contracts: 1, optionStyle: "call" },
+        { strike: 105, expiration: new Date("2026-06-15"), premium: 8.0, contracts: 1, optionStyle: "call" },
+      ]}));
+      const result = contract.validate();
+      expect(result.isValid).toBe(false);
+    });
+  });
+
+  describe("getType", () => {
+    it("should return 'calendar' when strikes are the same", () => {
+      const contract = new TermStrategyContract(makeInput());
+      expect(contract.getType()).toBe("calendar");
+    });
+
+    it("should return 'diagonal' when strikes are different", () => {
+      const input = makeInput({ legs: [
+        { strike: 95, expiration: new Date("2026-06-15"), premium: 5.0, contracts: 1, optionStyle: "call" },
+        { strike: 105, expiration: new Date("2026-09-15"), premium: 8.0, contracts: 1, optionStyle: "call" },
+      ]});
+      const contract = new TermStrategyContract(input);
+      expect(contract.getType()).toBe("diagonal");
+    });
+  });
+
+  describe("getLegs", () => {
+    it("should return a copy of the legs", () => {
+      const contract = new TermStrategyContract(makeInput());
+      const legs = contract.getLegs();
+      expect(legs).toHaveLength(2);
+      legs[0] = { strike: 999, expiration: new Date(), premium: 0, contracts: 0, optionStyle: "call" };
+      const legsAgain = contract.getLegs();
+      expect(legsAgain[0].strike).toBe(100);
+    });
+  });
+
+  describe("getInput", () => {
+    it("should return a copy of the input", () => {
+      const original = makeInput();
+      const contract = new TermStrategyContract(original);
+      const retrieved = contract.getInput();
+      expect(retrieved.underlying).toBe("SPY");
+      expect(retrieved.legs).toHaveLength(2);
+    });
+  });
+
+  describe("TermStrategyError", () => {
+    it("should create error with code, message, and field", () => {
+      const error = new TermStrategyError("TEST_CODE", "Test message", "testField");
+      expect(error.code).toBe("TEST_CODE");
+      expect(error.message).toBe("Test message");
+      expect(error.field).toBe("testField");
+    });
+
+    it("should create temporalInconsistency error", () => {
+      const error = TermStrategyError.temporalInconsistency("expiration", "Short expiration must be before long expiration.");
+      expect(error.code).toBe("TEMPORAL_INCONSISTENCY");
+      expect(error.field).toBe("expiration");
+    });
+
+    it("should create invalidOptionStyle error", () => {
+      const error = TermStrategyError.invalidOptionStyle("invalid");
+      expect(error.code).toBe("INVALID_OPTION_STYLE");
+    });
+
+    it("should create insufficientLegs error", () => {
+      const error = TermStrategyError.insufficientLegs(1);
+      expect(error.code).toBe("INSUFFICIENT_LEGS");
+    });
+  });
+});
