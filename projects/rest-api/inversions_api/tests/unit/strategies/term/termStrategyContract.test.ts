@@ -161,6 +161,26 @@ describe("TermStrategyContract", () => {
       const result = contract.validate();
       expect(result.isValid).toBe(false);
     });
+
+    it("should reject invalid date format (NaN)", () => {
+      const contract = new TermStrategyContract(makeInput({ legs: [
+        { strike: 100, expiration: new Date("invalid-date"), premium: 5.0, contracts: 1, optionStyle: "call" },
+        { strike: 100, expiration: new Date("2026-09-15"), premium: 8.0, contracts: 1, optionStyle: "call" },
+      ]}));
+      const result = contract.validate();
+      expect(result.isValid).toBe(false);
+      expect(result.errors.some(e => e.code === "INVALID_DATE_FORMAT")).toBe(true);
+    });
+
+    it("should reject expiration date in the past", () => {
+      const contract = new TermStrategyContract(makeInput({ legs: [
+        { strike: 100, expiration: new Date("2020-01-01"), premium: 5.0, contracts: 1, optionStyle: "call" },
+        { strike: 100, expiration: new Date("2026-09-15"), premium: 8.0, contracts: 1, optionStyle: "call" },
+      ]}));
+      const result = contract.validate();
+      expect(result.isValid).toBe(false);
+      expect(result.errors.some(e => e.code === "EXPIRATION_IN_PAST")).toBe(true);
+    });
   });
 
   describe("getType", () => {

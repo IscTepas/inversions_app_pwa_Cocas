@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import swaggerUi from "swagger-ui-express";
 import { initializeEnvironment } from "./config/environment";
 import { printValidationResult, validateEnvironment } from "./config/envValidator";
 import { createAuditHistoryRouter } from "./routes/audit/history";
@@ -23,6 +24,7 @@ import { indicatorsCatalogRouter } from "./routes/indicators/catalog";
 import { calendarSpreadRouter } from "./routes/strategies/term/calendarSpread";
 import { diagonalSpreadRouter } from "./routes/strategies/term/diagonalSpread";
 import { termComparatorRouter } from "./routes/strategies/term/termComparator";
+import { swaggerSpec } from "./swagger";
 
 const envValidation = validateEnvironment();
 if (!envValidation.isValid) {
@@ -61,6 +63,8 @@ app.use("/api/indicators", indicatorsCatalogRouter);
 app.use("/api/v1/strategies/term", calendarSpreadRouter);
 app.use("/api/v1/strategies/term", diagonalSpreadRouter);
 app.use("/api/v1/strategies/term", termComparatorRouter);
+
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });

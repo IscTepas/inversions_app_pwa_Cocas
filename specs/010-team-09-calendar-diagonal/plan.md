@@ -73,8 +73,13 @@ Cada fase canonica se materializa en uno o mas modulos de la arquitectura defini
 | **T09-3** Chat IA y API | `termComparator.ts` | Comparador Calendar vs Diagonal para recomendacion segun contexto | T168 |
 | **T09-3** Chat IA y API | `termChatAssistant.ts` | Integracion Chat IA explicativo | — |
 | **T09-3** Chat IA y API | `termReportEngine.ts` | Curvas de payoff, superficies tiempo-precio-IV, metricas riesgo/beneficio | T167 |
+| **T09-3** Chat IA y API | Documentacion OpenAPI/Swagger | Anotaciones JSDoc + ruta `/api/docs` | T199 |
+| **T09-3** Chat IA y API | Monte Carlo default en APIs | calendarSpread.ts, diagonalSpread.ts, term-verify.html | T201 |
+| **T09-1** Modelado temporal | Validacion fechas en contrato | `termStrategyContract.ts` — Invalid Date + fecha pasada | T200 |
 | **T09-4** Validacion | Tests unitarios y de integracion | `tests/unit/strategies/term/`, `tests/integration/strategies/term/` | T196, T197, T198 |
 | **T09-4** Validacion | Estandarizacion transversal | Ajuste al estandar transversal de estrategias | T177 |
+| **T09-4** Validacion | Cobertura tests chat assistant | termChatAssistant.test.ts (≥80%) | T202 |
+| **T09-4** Validacion | Cobertura tests report engine | termReportEngine.test.ts (branch ≥80%) | T203 |
 
 ---
 
@@ -204,12 +209,71 @@ Cada fase canonica se materializa en uno o mas modulos de la arquitectura defini
 - Ajustar implementacion de TEAM-09 al estandar transversal definido en `001-inv-tasks.md`
 - Asegurar consistencia de naming, estructura de archivos, manejo de errores y patrones de integracion con el resto de los equipos
 
+### 5.12 Documentacion OpenAPI/Swagger — T199
+
+**Dependencias**: T168 (APIs existentes)
+**Estimacion**: 1 unidad de desarrollo
+**Criterio de aceptacion**:
+- Anotaciones JSDoc OpenAPI en los 3 endpoints (calendar, diagonal, compare)
+- Ruta `/api/docs` servida con swagger-ui-express
+- Esquemas de request/response documentados
+- Documentacion consumible por TEAM-01 para integracion
+**Depende de**: T168 completado
+**Habilitador de**: Integracion con TEAM-01 (G-T09-03)
+
+### 5.13 Validacion de Fechas en Contrato Base — T200
+
+**Dependencias**: T162
+**Estimacion**: 0.5 unidades de desarrollo
+**Criterio de aceptacion**:
+- Rechazar `Invalid Date` (NaN) en expiraciones
+- Rechazar fechas de expiracion en pasado
+- Errores descriptivos con codigo y campo afectado
+**Depende de**: T162 completado
+**Habilitador de**: Calidad de datos en motores T163, T164
+
+### 5.14 Monte Carlo Default en APIs — T201
+
+**Dependencias**: T165, T168
+**Estimacion**: 0.5 unidades de desarrollo
+**Criterio de aceptacion**:
+- Ejecutar Monte Carlo por defecto (1000 iteraciones, normal) cuando no se especifique config
+- Mostrar resultados de Monte Carlo en term-verify.html
+- UI con controles basicos de Monte Carlo en pagina de verificacion
+**Depende de**: T165, T168 completados
+**Habilitador de**: Verificacion visual de simulacion Monte Carlo
+
+### 5.15 Tests Chat Assistant — T202
+
+**Dependencias**: S-T09-C01
+**Estimacion**: 0.5 unidades de desarrollo
+**Criterio de aceptacion**:
+- Cobertura de sentencias ≥80% en termChatAssistant.ts
+- Cobertura de ramas ≥80% en termChatAssistant.ts
+- Tests para metodos: buildPurpose, buildRiskProfile, buildUsageConditions, buildScenarioSummary, extractMetrics
+**Depende de**: S-T09-C01 completado
+**Habilitador de**: Cumplimiento RNF-006
+
+### 5.16 Tests Report Engine — T203
+
+**Dependencias**: T167
+**Estimacion**: 0.5 unidades de desarrollo
+**Criterio de aceptacion**:
+- Branch coverage ≥80% en termReportEngine.ts
+- Tests para generateSurface con datos parciales/nulos
+- Tests para calculateRiskMetrics con datos extremos
+- Tests para generateReport con ambas estrategias (calendar/diagonal)
+**Depende de**: T167 completado
+**Habilitador de**: Cumplimiento RNF-006
+
 ---
 
 ## 6. Grafo de Dependencias (Speckit expansion)
 
 ```
 T162 (termStrategyContract)
+  ├──> T200 (validacion fechas) ← desde T162
+  │
   ├──> T163 (calendarSpreadEngine)
   ├──> T164 (diagonalSpreadEngine)
   │
@@ -217,9 +281,14 @@ T162 (termStrategyContract)
   │     ├──> T166 (termRiskEngine)
   │     │     └──> T169 (termRollOrchestrator)
   │     └──> T167 (termReportEngine)
+  │           └──> T203 (tests report engine)
   │
   ├──> T168 (APIs + Comparator) ← depende de T163, T164, T165, T167
-  ├──> termChatAssistant ← depende de T163, T164, T165
+  │     ├──> T199 (OpenAPI/Swagger)
+  │     └──> T201 (Monte Carlo default) ← desde T165
+  │
+  ├──> S-T09-C01 (Chat IA) ← depende de T163, T164, T165
+  │     └──> T202 (tests chat assistant)
   │
   └──> T196 (tests unitarios engines)
   └──> T197 (tests unitarios simulacion)
@@ -363,9 +432,10 @@ T162 (termStrategyContract)
 | **preserved** | 12 |
 | **expanded** | 6 |
 | **merged** | 2 |
+| **added (Speckit expansion v2)** | 5 (T199-T203) |
 | **dropped** | 0 |
 
-**Resultado: SIN GAPS. Todo el contenido canonico de `teams/TEAM-09/plan.md` y `specs/010-team-09-calendar-diagonal/spec.md` esta preservado, expandido o mergeado. No hay omisiones no justificadas.**
+**Resultado: SIN GAPS. Todo el contenido canonico de `teams/TEAM-09/plan.md` y `specs/010-team-09-calendar-diagonal/spec.md` esta preservado, expandido o mergeado. No hay omisiones no justificadas. Se agregaron 5 nuevas tareas Speckit (T199-T203) para cubrir brechas de calidad y documentacion detectadas en auditoria.**
 
 ---
 
@@ -376,6 +446,8 @@ T162 (termStrategyContract)
 - [x] Grafo de dependencias definido
 - [x] Riesgos preservados y expandidos
 - [x] Cobertura canonica validada (preserved: 12, expanded: 6, merged: 2, dropped: 0)
+- [x] Plan operativo generado con trazabilidad 1:1 al canon Diana (v1)
+- [x] Tareas T199-T203 agregadas para cubrir brechas de calidad (v2)
 - [ ] Pendiente: `/diana.integrate action="run" engine="speckit" run_only="tasks"` para generar backlog operativo detallado
 - [ ] Pendiente: Resolver G-T09-01, G-T09-02, G-T09-03 antes de implementacion
 

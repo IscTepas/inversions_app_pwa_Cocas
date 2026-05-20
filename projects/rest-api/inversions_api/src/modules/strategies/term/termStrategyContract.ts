@@ -46,6 +46,14 @@ export class TermStrategyError {
   static invalidConfiguration(detail: string): TermStrategyError {
     return new TermStrategyError('INVALID_CONFIGURATION', detail);
   }
+
+  static invalidDateFormat(field: string, detail: string): TermStrategyError {
+    return new TermStrategyError('INVALID_DATE_FORMAT', detail, field);
+  }
+
+  static expirationInPast(field: string, detail: string): TermStrategyError {
+    return new TermStrategyError('EXPIRATION_IN_PAST', detail, field);
+  }
 }
 
 export class TermStrategyContract {
@@ -95,6 +103,15 @@ export class TermStrategyContract {
       }
       if (leg.optionStyle !== 'call' && leg.optionStyle !== 'put') {
         errors.push(TermStrategyError.invalidOptionStyle(String(leg.optionStyle)));
+      }
+      const expTime = leg.expiration.getTime();
+      if (isNaN(expTime)) {
+        errors.push(TermStrategyError.invalidDateFormat(`Leg ${i}.expiration`, `Leg ${i}: expiration date is invalid.`));
+      } else {
+        const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+        if (expTime < oneDayAgo) {
+          errors.push(TermStrategyError.expirationInPast(`Leg ${i}.expiration`, `Leg ${i}: expiration date is in the past.`));
+        }
       }
     }
 

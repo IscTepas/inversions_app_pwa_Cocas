@@ -33,6 +33,67 @@ export interface CompareResponse {
 
 export const termComparatorRouter = Router();
 
+/**
+ * @openapi
+ * /compare:
+ *   post:
+ *     tags: [Comparator]
+ *     summary: Compara Calendar Spread vs Diagonal Spread y recomienda estrategia
+ *     description: >
+ *       Evalua el contexto de mercado (volatilidad, horizonte, direccion, tolerancia)
+ *       y las metricas de ambas estrategias para recomendar la mas adecuada.
+ *       Incluye justificacion textual y metricas comparativas.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [marketVolatility, timeHorizon, direction, riskTolerance, calendarLegs, diagonalLegs]
+ *             properties:
+ *               marketVolatility: { type: string, enum: [low, medium, high], example: "medium" }
+ *               timeHorizon:      { type: string, enum: [short, medium, long], example: "long" }
+ *               direction:        { type: string, enum: [bullish, bearish, neutral], example: "neutral" }
+ *               riskTolerance:    { type: string, enum: [conservative, moderate, aggressive], example: "conservative" }
+ *               calendarLegs:
+ *                 type: array
+ *                 minItems: 2
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     strike:      { type: number, example: 100 }
+ *                     expiration:  { type: string, format: date, example: "2026-06-19" }
+ *                     premium:     { type: number, example: 2.50 }
+ *                     contracts:   { type: integer, example: 1 }
+ *                     optionStyle: { type: string, enum: [call, put], example: "call" }
+ *               diagonalLegs:
+ *                 type: array
+ *                 minItems: 2
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     strike:      { type: number, example: 95 }
+ *                     expiration:  { type: string, format: date, example: "2026-06-19" }
+ *                     premium:     { type: number, example: 3.50 }
+ *                     contracts:   { type: integer, example: 1 }
+ *                     optionStyle: { type: string, enum: [call, put], example: "call" }
+ *     responses:
+ *       200:
+ *         description: Comparacion completada exitosamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 recommendation:  { type: string, enum: [calendar, diagonal] }
+ *                 justification:  { type: string }
+ *                 calendarMetrics: { type: object }
+ *                 diagonalMetrics: { type: object }
+ *       400:
+ *         description: Error de validacion
+ *       500:
+ *         description: Error interno del servidor
+ */
 termComparatorRouter.post("/compare", (req, res) => {
   try {
     const body = req.body as CompareRequest;

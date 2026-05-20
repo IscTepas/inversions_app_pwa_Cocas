@@ -126,6 +126,11 @@ Este feature es el slice operativo del equipo TEAM-09 dentro de la iniciativa 00
 | T196 | Tests unitarios calendar/diagonal engines | Tests |
 | T197 | Tests unitarios simulacion y orquestador | Tests |
 | T198 | Tests de integracion para routes | Tests |
+| T199 | Documentacion OpenAPI/Swagger para endpoints Term | calendarSpread.ts, diagonalSpread.ts, termComparator.ts |
+| T200 | Validacion de fechas en contrato base (Invalid Date, fechas pasadas) | termStrategyContract.ts |
+| T201 | Monte Carlo default en APIs + UI en term-verify.html | calendarSpread.ts, diagonalSpread.ts, term-verify.html |
+| T202 | Cobertura tests termChatAssistant ≥80% | termChatAssistant.test.ts |
+| T203 | Cobertura tests termReportEngine branch ≥80% | termReportEngine.test.ts |
 
 ---
 
