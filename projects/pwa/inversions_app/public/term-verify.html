@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TEAM-09 — Verificación Term Strategies</title>
+<style>
+  :root { --bg: #0f172a; --surface: #1e293b; --border: #334155; --text: #f1f5f9; --muted: #94a3b8; --accent: #38bdf8; --green: #22c55e; --red: #ef4444; --yellow: #eab308; --radius: 8px; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 24px; max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin-bottom: 4px; }
+  h1 small { font-size: 0.8rem; color: var(--muted); font-weight: 400; display: block; margin-top: 2px; }
+  .disclaimer { background: #1e3a5f; border: 1px solid #1e40af; border-radius: var(--radius); padding: 10px 14px; font-size: 0.78rem; color: #93c5fd; margin: 12px 0 20px; line-height: 1.4; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+  .tab { padding: 10px 20px; border: 1px solid var(--border); border-radius: var(--radius) var(--radius) 0 0; background: var(--surface); color: var(--muted); cursor: pointer; font-size: 0.9rem; transition: .15s; }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--bg); border-bottom-color: var(--bg); color: var(--accent); font-weight: 600; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+  .card h3 { font-size: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 12px; }
+  .field { flex: 1; min-width: 140px; }
+  .field label { display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 3px; }
+  .field input, .field select { width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; background: #0f172a; color: var(--text); font-size: 0.85rem; }
+  .field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
+  .btn { padding: 8px 20px; border: none; border-radius: var(--radius); background: var(--accent); color: #0f172a; font-weight: 600; cursor: pointer; font-size: 0.85rem; transition: .15s; }
+  .btn:hover { opacity: .85; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .metric-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .metric { background: #0f172a; border-radius: 6px; padding: 8px 14px; text-align: center; min-width: 90px; flex: 1; }
+  .metric .val { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .metric .lbl { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; margin-top: 2px; }
+  .positive { color: var(--green); }
+  .negative { color: var(--red); }
+  .neutral { color: var(--yellow); }
+  .tag { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
+  .tag-green { background: #14532d; color: var(--green); }
+  .tag-red { background: #450a0a; color: var(--red); }
+  .tag-blue { background: #1e3a5f; color: var(--accent); }
+  table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 500; }
+  td { padding: 5px 8px; border-bottom: 1px solid #1e293b; font-variant-numeric: tabular-nums; }
+  tr:hover td { background: #0f172a; }
+  .scroll { max-height: 320px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; }
+  .rec-box { text-align: center; padding: 20px; border-radius: var(--radius); margin-bottom: 12px; font-size: 1.3rem; font-weight: 700; }
+  .rec-calendar { background: #14532d; color: var(--green); border: 1px solid var(--green); }
+  .rec-diagonal { background: #1e3a5f; color: var(--accent); border: 1px solid var(--accent); }
+  .just { font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
+  #toast { position: fixed; bottom: 24px; right: 24px; background: var(--red); color: #fff; padding: 10px 18px; border-radius: var(--radius); font-size: 0.85rem; display: none; z-index: 999; max-width: 400px; }
+</style>
+</head>
+<body>
+
+<h1>🔍 TEAM-09 — Verificación Term Strategies</h1>
+<small style="color:var(--muted)">Calendar Spread & Diagonal Spread — SquadISC</small>
+
+<div class="disclaimer">
+  ⚠️ <strong>RNF-001:</strong> Esta herramienta es solo para verificación técnica. No constituye asesoramiento financiero ni autoriza ejecución de operaciones. Toda decisión de inversión requiere juicio humano.
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="calendar" onclick="switchTab('calendar')">📅 Calendar Spread</div>
+  <div class="tab" data-tab="diagonal" onclick="switchTab('diagonal')">📐 Diagonal Spread</div>
+  <div class="tab" data-tab="compare" onclick="switchTab('compare')">⚖️ Comparador</div>
+</div>
+
+<!-- ===== PANEL CALENDAR ===== -->
+<div id="panel-calendar" class="panel active">
+  <div class="card">
+    <h3>Parámetros</h3>
+    <div class="row">
+      <div class="field"><label>Strike</label><input id="cal-strike" value="100"></div>
+      <div class="field"><label>Exp. Corta</label><input id="cal-exp-short" value="2026-06-19"></div>
+      <div class="field"><label>Exp. Larga</label><input id="cal-exp-long" value="2026-09-18"></div>
+      <div class="field"><label>Prima Corta</label><input id="cal-prem-short" value="2.50"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Prima Larga</label><input id="cal-prem-long" value="5.00"></div>
+      <div class="field"><label>Contratos</label><input id="cal-contracts" value="1"></div>
+      <div class="field"><label>Tipo</label><select id="cal-style"><option value="call">Call</option><option value="put">Put</option></select></div>
+      <div class="field"><label>Risk Free Rate</label><input id="cal-rfr" value="0.05"></div>
+    </div>
+    <button class="btn" onclick="testCalendar()">▶ Probar Calendar Spread</button>
+  </div>
+  <div id="cal-result"></div>
+</div>
+
+<!-- ===== PANEL DIAGONAL ===== -->
+<div id="panel-diagonal" class="panel">
+  <div class="card">
+    <h3>Parámetros</h3>
+    <div class="row">
+      <div class="field"><label>Strike Corto</label><input id="diag-strike-short" value="95"></div>
+      <div class="field"><label>Strike Largo</label><input id="diag-strike-long" value="105"></div>
+      <div class="field"><label>Exp. Corta</label><input id="diag-exp-short" value="2026-06-19"></div>
+      <div class="field"><label>Exp. Larga</label><input id="diag-exp-long" value="2026-09-18"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Prima Corta</label><input id="diag-prem-short" value="3.50"></div>
+      <div class="field"><label>Prima Larga</label><input id="diag-prem-long" value="4.00"></div>
+      <div class="field"><label>Contratos</label><input id="diag-contracts" value="1"></div>
+      <div class="field"><label>Tipo</label><select id="diag-style"><option value="call">Call</option><option value="put">Put</option></select></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Risk Free Rate</label><input id="diag-rfr" value="0.05"></div>
+      <div class="field"></div>
+      <div class="field"></div>
+      <div class="field"></div>
+    </div>
+    <button class="btn" onclick="testDiagonal()">▶ Probar Diagonal Spread</button>
+  </div>
+  <div id="diag-result"></div>
+</div>
+
+<!-- ===== PANEL COMPARE ===== -->
+<div id="panel-compare" class="panel">
+  <div class="card">
+    <h3>Contexto de Mercado</h3>
+    <div class="row">
+      <div class="field"><label>Volatilidad</label><select id="cmp-vol"><option value="low">Baja</option><option value="medium" selected>Media</option><option value="high">Alta</option></select></div>
+      <div class="field"><label>Horizonte</label><select id="cmp-hor"><option value="short">Corto</option><option value="medium">Medio</option><option value="long" selected>Largo</option></select></div>
+      <div class="field"><label>Dirección</label><select id="cmp-dir"><option value="bullish">Bullish</option><option value="neutral" selected>Neutral</option><option value="bearish">Bearish</option></select></div>
+      <div class="field"><label>Tolerancia</label><select id="cmp-risk"><option value="conservative" selected>Conservador</option><option value="moderate">Moderado</option><option value="aggressive">Agresivo</option></select></div>
+    </div>
+    <details style="margin-bottom:10px;cursor:pointer;color:var(--muted);font-size:0.85rem">
+      <summary>Configurar legs manualmente</summary>
+      <div style="margin-top:8px">
+        <div style="font-size:0.8rem;color:var(--muted);margin-bottom:6px">Calendar legs (mismo strike):</div>
+        <div class="row">
+          <div class="field"><label>Strike</label><input id="cmp-cal-strike" value="100"></div>
+          <div class="field"><label>Exp. Corta</label><input id="cmp-cal-exp-s" value="2026-06-19"></div>
+          <div class="field"><label>Exp. Larga</label><input id="cmp-cal-exp-l" value="2026-09-18"></div>
+          <div class="field"><label>Prima Corta</label><input id="cmp-cal-prem-s" value="2.50"></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>Prima Larga</label><input id="cmp-cal-prem-l" value="5.00"></div>
+          <div class="field"><label>Contratos</label><input id="cmp-cal-ct" value="1"></div>
+          <div class="field"><label>Tipo</label><select id="cmp-cal-style"><option value="call">Call</option><option value="put">Put</option></select></div>
+          <div class="field"></div>
+        </div>
+        <div style="font-size:0.8rem;color:var(--muted);margin-bottom:6px;margin-top:8px">Diagonal legs (strikes diferentes):</div>
+        <div class="row">
+          <div class="field"><label>Strike Corto</label><input id="cmp-diag-strike-s" value="95"></div>
+          <div class="field"><label>Strike Largo</label><input id="cmp-diag-strike-l" value="105"></div>
+          <div class="field"><label>Exp. Corta</label><input id="cmp-diag-exp-s" value="2026-06-19"></div>
+          <div class="field"><label>Exp. Larga</label><input id="cmp-diag-exp-l" value="2026-09-18"></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>Prima Corta</label><input id="cmp-diag-prem-s" value="3.50"></div>
+          <div class="field"><label>Prima Larga</label><input id="cmp-diag-prem-l" value="4.00"></div>
+          <div class="field"><label>Contratos</label><input id="cmp-diag-ct" value="1"></div>
+          <div class="field"><label>Tipo</label><select id="cmp-diag-style"><option value="call">Call</option><option value="put">Put</option></select></div>
+        </div>
+      </div>
+    </details>
+    <button class="btn" onclick="testCompare()">▶ Comparar Estrategias</button>
+  </div>
+  <div id="cmp-result"></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+function $(id) { return document.getElementById(id); }
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  $(`panel-${name}`).classList.add('active');
+}
+
+function fmt(v, d) { if (v === null || v === undefined) return '—'; if (typeof v === 'number') return Number(v.toFixed(d ?? 2)).toLocaleString(); return String(v); }
+function cls(v) { if (v === null || v === undefined) return ''; return v > 0 ? 'positive' : v < 0 ? 'negative' : ''; }
+function tag(v, green, red) { return v === green ? `<span class="tag tag-green">${v}</span>` : v === red ? `<span class="tag tag-red">${v}</span>` : `<span class="tag tag-blue">${v}</span>`; }
+
+function showToast(msg) { const t = $('toast'); t.textContent = msg; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 4000); }
+
+function buildCalendarBody() {
+  const s = $('cal-strike').value;
+  return {
+    legs: [
+      { strike: Number(s), expiration: $('cal-exp-short').value, premium: Number($('cal-prem-short').value), contracts: Number($('cal-contracts').value), optionStyle: $('cal-style').value },
+      { strike: Number(s), expiration: $('cal-exp-long').value, premium: Number($('cal-prem-long').value), contracts: Number($('cal-contracts').value), optionStyle: $('cal-style').value }
+    ],
+    riskFreeRate: Number($('cal-rfr').value)
+  };
+}
+
+function buildDiagonalBody() {
+  return {
+    legs: [
+      { strike: Number($('diag-strike-short').value), expiration: $('diag-exp-short').value, premium: Number($('diag-prem-short').value), contracts: Number($('diag-contracts').value), optionStyle: $('diag-style').value },
+      { strike: Number($('diag-strike-long').value), expiration: $('diag-exp-long').value, premium: Number($('diag-prem-long').value), contracts: Number($('diag-contracts').value), optionStyle: $('diag-style').value }
+    ],
+    riskFreeRate: Number($('diag-rfr').value)
+  };
+}
+
+function buildCompareBody() {
+  const calS = $('cmp-cal-strike').value;
+  return {
+    marketVolatility: $('cmp-vol').value,
+    timeHorizon: $('cmp-hor').value,
+    direction: $('cmp-dir').value,
+    riskTolerance: $('cmp-risk').value,
+    calendarLegs: [
+      { strike: Number(calS), expiration: $('cmp-cal-exp-s').value, premium: Number($('cmp-cal-prem-s').value), contracts: Number($('cmp-cal-ct').value), optionStyle: $('cmp-cal-style').value },
+      { strike: Number(calS), expiration: $('cmp-cal-exp-l').value, premium: Number($('cmp-cal-prem-l').value), contracts: Number($('cmp-cal-ct').value), optionStyle: $('cmp-cal-style').value }
+    ],
+    diagonalLegs: [
+      { strike: Number($('cmp-diag-strike-s').value), expiration: $('cmp-diag-exp-s').value, premium: Number($('cmp-diag-prem-s').value), contracts: Number($('cmp-diag-ct').value), optionStyle: $('cmp-diag-style').value },
+      { strike: Number($('cmp-diag-strike-l').value), expiration: $('cmp-diag-exp-l').value, premium: Number($('cmp-diag-prem-l').value), contracts: Number($('cmp-diag-ct').value), optionStyle: $('cmp-diag-style').value }
+    ]
+  };
+}
+
+async function post(url, body) {
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) { const e = await r.json().catch(() => ({ error: r.statusText })); throw new Error(e.error || e.message || r.statusText); }
+  return r.json();
+}
+
+// === CALENDAR ===
+async function testCalendar() {
+  const el = $('cal-result');
+  el.innerHTML = '<p style="color:var(--muted)">Cargando…</p>';
+  try {
+    const d = await post('/api/v1/strategies/term/calendar', buildCalendarBody());
+    const a = d.analysis || {};
+    el.innerHTML = `
+      <div class="card">
+        <h3>Métricas Clave</h3>
+        <div class="metric-grid">
+          <div class="metric"><div class="val ${cls(a.netTheta)}">${fmt(a.netTheta)}</div><div class="lbl">Theta Neta</div></div>
+          <div class="metric"><div class="val">${fmt(a.shortDte,0)}</div><div class="lbl">DTE Corto</div></div>
+          <div class="metric"><div class="val">${fmt(a.longDte,0)}</div><div class="lbl">DTE Largo</div></div>
+          <div class="metric"><div class="val ${cls(a.shortTheta)}">${fmt(a.shortTheta)}</div><div class="lbl">θ Corta</div></div>
+          <div class="metric"><div class="val ${cls(a.longTheta)}">${fmt(a.longTheta)}</div><div class="lbl">θ Larga</div></div>
+        </div>
+      </div>
+      ${d.report ? buildPayoffTable(d.report.payoffCurve) : ''}
+      ${d.report ? buildRiskMetrics(d.report.riskMetrics) : ''}
+      ${d.report && d.report.surface ? buildSurfaceInfo(d.report.surface) : ''}
+      <div class="card">
+        <h3>Escenarios de Precio (${d.scenarios?.length ?? 0})</h3>
+        <div class="scroll">
+          <table><thead><tr><th>Precio</th><th>Valor Estrat.</th><th class="${cls()}">P&L</th><th>θ</th></tr></thead>
+          <tbody>${(d.scenarios || []).map(s => `<tr><td>$${fmt(s.underlyingPrice,1)}</td><td>$${fmt(s.strategyValue)}</td><td class="${cls(s.pnl)}">$${fmt(s.pnl)}</td><td class="${cls(s.theta)}">${fmt(s.theta)}</td></tr>`).join('')}</tbody></table>
+        </div>
+      </div>
+      <p style="color:var(--muted);font-size:0.75rem">generatedAt: ${d.report?.generatedAt ?? '—'}</p>
+    `;
+  } catch (e) { el.innerHTML = `<div class="card" style="border-color:var(--red)"><h3 style="color:var(--red)">Error</h3><p>${e.message}</p></div>`; showToast(e.message); }
+}
+
+// === DIAGONAL ===
+async function testDiagonal() {
+  const el = $('diag-result');
+  el.innerHTML = '<p style="color:var(--muted)">Cargando…</p>';
+  try {
+    const d = await post('/api/v1/strategies/term/diagonal', buildDiagonalBody());
+    const a = d.analysis || {};
+    const g = a.greeks || {};
+    el.innerHTML = `
+      <div class="card">
+        <h3>Métricas Clave</h3>
+        <div class="metric-grid">
+          <div class="metric"><div class="val ${cls(g.delta)}">${fmt(g.delta)}</div><div class="lbl">Δ Neta</div></div>
+          <div class="metric"><div class="val ${cls(g.gamma)}">${fmt(g.gamma)}</div><div class="lbl">Γ Neta</div></div>
+          <div class="metric"><div class="val ${cls(g.theta)}">${fmt(g.theta)}</div><div class="lbl">θ Neta</div></div>
+          <div class="metric"><div class="val ${cls(g.vega)}">${fmt(g.vega)}</div><div class="lbl">V Neta</div></div>
+          <div class="metric"><div class="val">${fmt(a.shortDte,0)}</div><div class="lbl">DTE Corto</div></div>
+          <div class="metric"><div class="val">${fmt(a.longDte,0)}</div><div class="lbl">DTE Largo</div></div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <div><span style="color:var(--muted);font-size:0.8rem">Perfil: </span>${tag(a.directionalProfile,'neutral','bullish')}</div>
+          <div><span style="color:var(--muted);font-size:0.8rem">Ajuste: </span>${a.adjustmentWindow ? '<span class="tag tag-red">Requiere ajuste</span>' : '<span class="tag tag-green">Sin ajuste</span>'}</div>
+        </div>
+      </div>
+      ${d.report ? buildPayoffTable(d.report.payoffCurve) : ''}
+      ${d.report ? buildRiskMetrics(d.report.riskMetrics) : ''}
+      <div class="card">
+        <h3>Escenarios de Precio (${d.scenarios?.length ?? 0})</h3>
+        <div class="scroll">
+          <table><thead><tr><th>Precio</th><th>Valor</th><th class="${cls()}">P&L</th><th>Δ</th><th>θ</th><th>V</th></tr></thead>
+          <tbody>${(d.scenarios || []).map(s => `<tr><td>$${fmt(s.underlyingPrice,1)}</td><td>$${fmt(s.strategyValue)}</td><td class="${cls(s.pnl)}">$${fmt(s.pnl)}</td><td class="${cls(s.greeks?.delta)}">${fmt(s.greeks?.delta)}</td><td class="${cls(s.greeks?.theta)}">${fmt(s.greeks?.theta)}</td><td class="${cls(s.greeks?.vega)}">${fmt(s.greeks?.vega)}</td></tr>`).join('')}</tbody></table>
+        </div>
+      </div>
+      <p style="color:var(--muted);font-size:0.75rem">generatedAt: ${d.report?.generatedAt ?? '—'}</p>
+    `;
+  } catch (e) { el.innerHTML = `<div class="card" style="border-color:var(--red)"><h3 style="color:var(--red)">Error</h3><p>${e.message}</p></div>`; showToast(e.message); }
+}
+
+// === COMPARE ===
+async function testCompare() {
+  const el = $('cmp-result');
+  el.innerHTML = '<p style="color:var(--muted)">Cargando…</p>';
+  try {
+    const d = await post('/api/v1/strategies/term/compare', buildCompareBody());
+    const isCal = d.recommendation === 'calendar';
+    el.innerHTML = `
+      <div class="card">
+        <div class="rec-box ${isCal ? 'rec-calendar' : 'rec-diagonal'}">
+          ${isCal ? '📅' : '📐'} Recomendación: ${d.recommendation.toUpperCase()}
+        </div>
+        <p class="just">${d.justification}</p>
+      </div>
+      <div class="card">
+        <h3>Métricas Comparativas</h3>
+        <div class="metric-grid">
+          <div class="metric" style="border:1px solid ${isCal ? 'var(--green)' : 'var(--border)'}">
+            <div class="val" style="color:${isCal ? 'var(--green)' : 'var(--text)'}">${fmt(d.calendarMetrics?.netTheta)}</div>
+            <div class="lbl">θ Calendar</div>
+          </div>
+          <div class="metric" style="border:1px solid ${!isCal ? 'var(--accent)' : 'var(--border)'}">
+            <div class="val" style="color:${!isCal ? 'var(--accent)' : 'var(--text)'}">${fmt(d.diagonalMetrics?.netTheta)}</div>
+            <div class="lbl">θ Diagonal</div>
+          </div>
+          <div class="metric"><div class="val">${fmt(d.calendarMetrics?.shortDte,0)}</div><div class="lbl">DTE Calendar</div></div>
+          <div class="metric"><div class="val">${fmt(d.diagonalMetrics?.shortDte,0)}</div><div class="lbl">DTE Diagonal</div></div>
+          <div class="metric"><div class="val ${cls(d.diagonalMetrics?.netDelta)}">${fmt(d.diagonalMetrics?.netDelta)}</div><div class="lbl">Δ Diagonal</div></div>
+        </div>
+      </div>
+    `;
+  } catch (e) { el.innerHTML = `<div class="card" style="border-color:var(--red)"><h3 style="color:var(--red)">Error</h3><p>${e.message}</p></div>`; showToast(e.message); }
+}
+
+function buildPayoffTable(curve) {
+  if (!curve || curve.length === 0) return '';
+  const anchor = curve.find(p => p.pnl === 0);
+  return `<div class="card">
+    <h3>Curva de Payoff (${curve.length} pts) ${anchor ? `— ATM ≡ $${fmt(anchor.price,1)}` : ''}</h3>
+    <div class="scroll">
+      <table><thead><tr><th>Precio</th><th>Payoff</th><th class="${cls()}">P&L</th></tr></thead>
+      <tbody>${curve.map(p => `<tr><td>$${fmt(p.price,1)}</td><td>$${fmt(p.payoff)}</td><td class="${cls(p.pnl)}">$${fmt(p.pnl)}</td></tr>`).join('')}</tbody></table>
+    </div>
+  </div>`;
+}
+
+function buildRiskMetrics(m) {
+  if (!m) return '';
+  return `<div class="card">
+    <h3>Métricas de Riesgo</h3>
+    <div class="metric-grid">
+      <div class="metric"><div class="val ${cls(m.netDelta)}">${fmt(m.netDelta)}</div><div class="lbl">Δ</div></div>
+      <div class="metric"><div class="val ${cls(m.netGamma)}">${fmt(m.netGamma)}</div><div class="lbl">Γ</div></div>
+      <div class="metric"><div class="val ${cls(m.netTheta)}">${fmt(m.netTheta)}</div><div class="lbl">θ</div></div>
+      <div class="metric"><div class="val ${cls(m.netVega)}">${fmt(m.netVega)}</div><div class="lbl">V</div></div>
+      <div class="metric"><div class="val">${fmt(m.probabilityOfProfit*100,1)}%</div><div class="lbl">POP</div></div>
+      <div class="metric"><div class="val">${fmt(m.sharpeRatio)}</div><div class="lbl">Sharpe</div></div>
+    </div>
+  </div>`;
+}
+
+function buildSurfaceInfo(s) {
+  if (!s) return '';
+  return `<div class="card">
+    <h3>Superficie Tiempo-Precio-IV</h3>
+    <div class="row">
+      <div class="field"><label>Rango Precios</label><span style="color:var(--text)">$${fmt(s.priceAxis?.[0],1)} → $${fmt(s.priceAxis?.[s.priceAxis.length-1],1)}</span></div>
+      <div class="field"><label>Rango DTE</label><span style="color:var(--text)">${fmt(s.dteAxis?.[0],0)}d → ${fmt(s.dteAxis?.[s.dteAxis.length-1],0)}d</span></div>
+      <div class="field"><label>Filas (DTE)</label><span style="color:var(--text)">${s.pnlMatrix?.length ?? 0}</span></div>
+      <div class="field"><label>Columnas (Precio)</label><span style="color:var(--text)">${s.pnlMatrix?.[0]?.length ?? 0}</span></div>
+    </div>
+  </div>`;
+}
+</script>
+</body>
+</html>

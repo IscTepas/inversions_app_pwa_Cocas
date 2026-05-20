@@ -711,9 +711,9 @@ T162 (termStrategyContract)
 - [x] Required skills verificadas sin gaps
 - [x] Cobertura canonica validada (preserved: 21, expanded: 12, merged: 1, dropped: 0)
 - [X] Pendiente: Ejecutar `/diana.integrate action="run" engine="speckit" run_only="implement"` para iniciar implementacion Speckit
-- [ ] Pendiente: Resolver G-T09-01 antes de Ola 1
-- [ ] Pendiente: Resolver G-T09-02 antes de T169
-- [ ] Pendiente: Resolver G-T09-03 antes de T167/T168
+- [ ] (gap externo) G-T09-01: Definir supuestos de modelado de curva temporal e IV term structure por mercado — requiere coordinacion con Riesgo Institucional
+- [ ] (gap externo) G-T09-02: Validar reglas de roll (calendario, triggers, costos) con politica de riesgo institucional — requiere coordinacion con Riesgo Institucional
+- [ ] (gap externo) G-T09-03: Acordar formato de metricas de theta decay y sensibilidad temporal para UI consolidada — requiere coordinacion con TEAM-01
 
 ---
 
