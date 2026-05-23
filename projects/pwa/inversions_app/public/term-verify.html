@@ -62,7 +62,14 @@
   .error-card h3 { color: var(--red) !important; }
   .error-card p { color: #fca5a5; }
   .error-card code { display: block; background: #0f172a; padding: 8px 12px; border-radius: 4px; margin-top: 8px; color: #e2e8f0; font-size: 0.8rem; }
+  .winner-badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 700; margin-left: 4px; }
+  .winner-cal { background: #14532d; color: var(--green); }
+  .winner-diag { background: #1e3a5f; color: var(--accent); }
+  .winner-tie { background: #334155; color: var(--muted); }
+  .reason-cell { font-size: 0.75rem; color: var(--muted); font-style: italic; max-width: 220px; }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 </head>
 <body>
 
@@ -155,6 +162,7 @@
       <div class="field"><label>Horizonte</label><select id="cmp-hor"><option value="short">Corto</option><option value="medium">Medio</option><option value="long" selected>Largo</option></select></div>
       <div class="field"><label>Dirección</label><select id="cmp-dir"><option value="bullish">Bullish</option><option value="neutral" selected>Neutral</option><option value="bearish">Bearish</option></select></div>
       <div class="field"><label>Tolerancia</label><select id="cmp-risk"><option value="conservative" selected>Conservador</option><option value="moderate">Moderado</option><option value="aggressive">Agresivo</option></select></div>
+      <div class="field"><label>Precio Subyacente</label><input id="cmp-price" value="100" type="number" step="0.01"></div>
     </div>
     <details style="margin-bottom:10px;cursor:pointer;color:var(--muted);font-size:0.85rem">
       <summary>Configurar legs manualmente</summary>
@@ -362,6 +370,7 @@ async function testDiagonal() {
 function buildCompareBody() {
   const calS = $('cmp-cal-strike').value;
   return {
+    underlyingPrice: Number($('cmp-price').value) || undefined,
     marketVolatility: $('cmp-vol').value,
     timeHorizon: $('cmp-hor').value,
     direction: $('cmp-dir').value,
@@ -385,6 +394,8 @@ async function testCompare() {
     const isCal = d.recommendation === 'calendar';
     const cal = d.calendar || {};
     const diag = d.diagonal || {};
+    const met = d.metricas || [];
+
     el.innerHTML = `
       <div class="card">
         <div class="rec-box ${isCal ? 'rec-calendar' : 'rec-diagonal'}">
@@ -393,43 +404,198 @@ async function testCompare() {
         <p class="just">${d.justification}</p>
       </div>
       <div class="card">
+        <h3>📈 Payoff Superpuesto — Calendar vs Diagonal</h3>
+        <div style="position:relative">
+          <canvas id="cmp-chart" height="340"></canvas>
+        </div>
+      </div>
+      <div class="card">
         <h3>💰 Capital &amp; Riesgo</h3>
-        <table>
-          <thead><tr><th>Métrica</th><th style="color:${isCal ? 'var(--green)' : 'var(--text)'}">📅 Calendar</th><th style="color:${!isCal ? 'var(--accent)' : 'var(--text)'}">📐 Diagonal</th></tr></thead>
-          <tbody>
-            <tr><td>Costo Neto (débito)</td><td class="${cls(cal.cost)}">$${fmt(cal.cost)}</td><td class="${cls(diag.cost)}">$${fmt(diag.cost)}</td></tr>
-            <tr><td>Pérdida Máxima</td><td class="${cls(cal.maxLoss)}">$${fmt(cal.maxLoss)}</td><td class="${cls(diag.maxLoss)}">$${fmt(diag.maxLoss)}</td></tr>
-            <tr><td>Ganancia Máxima</td><td class="${cls(cal.maxProfit)}">$${fmt(cal.maxProfit)}</td><td class="${cls(diag.maxProfit)}">$${fmt(diag.maxProfit)}</td></tr>
-            <tr><td>Break-Evens</td><td>${(cal.breakEvens||[]).map(b => '$'+fmt(b)).join(', ') || '—'}</td><td>${(diag.breakEvens||[]).map(b => '$'+fmt(b)).join(', ') || '—'}</td></tr>
-            <tr><td>Prob. de Ganancia</td><td>${fmt(cal.probabilityOfProfit!=null ? cal.probabilityOfProfit*100 : null,1)}%</td><td>${fmt(diag.probabilityOfProfit!=null ? diag.probabilityOfProfit*100 : null,1)}%</td></tr>
-            <tr><td>Perfil Direccional</td><td>${cal.directionalProfile || 'neutral'}</td><td>${diag.directionalProfile || 'neutral'}</td></tr>
-          </tbody>
-        </table>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Métrica</th><th>📅 Calendar</th><th>📐 Diagonal</th><th>¿Por qué es mejor?</th></tr></thead>
+            <tbody>${met.filter(m => m.category === 'capital').map(m => renderMetRow(m, isCal)).join('')}</tbody>
+          </table>
+        </div>
       </div>
       <div class="card">
         <h3>📊 Exposición Griegas</h3>
-        <table>
-          <thead><tr><th>Griega</th><th style="color:${isCal ? 'var(--green)' : 'var(--text)'}">📅 Calendar</th><th style="color:${!isCal ? 'var(--accent)' : 'var(--text)'}">📐 Diagonal</th></tr></thead>
-          <tbody>
-            <tr><td>Delta (Δ)</td><td class="${cls(cal.greeks?.delta)}">${fmt(cal.greeks?.delta)}</td><td class="${cls(diag.greeks?.delta)}">${fmt(diag.greeks?.delta)}</td></tr>
-            <tr><td>Gamma (Γ)</td><td class="${cls(cal.greeks?.gamma)}">${fmt(cal.greeks?.gamma)}</td><td class="${cls(diag.greeks?.gamma)}">${fmt(diag.greeks?.gamma)}</td></tr>
-            <tr><td>Theta (θ)</td><td class="${cls(cal.greeks?.theta)}">${fmt(cal.greeks?.theta)}</td><td class="${cls(diag.greeks?.theta)}">${fmt(diag.greeks?.theta)}</td></tr>
-            <tr><td>Vega (ν)</td><td class="${cls(cal.greeks?.vega)}">${fmt(cal.greeks?.vega)}</td><td class="${cls(diag.greeks?.vega)}">${fmt(diag.greeks?.vega)}</td></tr>
-          </tbody>
-        </table>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Griega</th><th>📅 Calendar</th><th>📐 Diagonal</th><th>¿Por qué es mejor?</th></tr></thead>
+            <tbody>${met.filter(m => m.category === 'greeks').map(m => renderMetRow(m, isCal)).join('')}</tbody>
+          </table>
+        </div>
       </div>
       <div class="card">
         <h3>⏳ DTE (Días hasta Vencimiento)</h3>
-        <table>
-          <thead><tr><th>Pata</th><th style="color:${isCal ? 'var(--green)' : 'var(--text)'}">📅 Calendar</th><th style="color:${!isCal ? 'var(--accent)' : 'var(--text)'}">📐 Diagonal</th></tr></thead>
-          <tbody>
-            <tr><td>Corta</td><td>${fmt(cal.dte?.short,0)}d</td><td>${fmt(diag.dte?.short,0)}d</td></tr>
-            <tr><td>Larga</td><td>${fmt(cal.dte?.long,0)}d</td><td>${fmt(diag.dte?.long,0)}d</td></tr>
-          </tbody>
-        </table>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Pata</th><th>📅 Calendar</th><th>📐 Diagonal</th><th>¿Por qué es mejor?</th></tr></thead>
+            <tbody>${met.filter(m => m.category === 'dte').map(m => renderMetRow(m, isCal)).join('')}</tbody>
+          </table>
+        </div>
       </div>
     `;
+
+    // Render chart
+    if (cal.payoffCurveT0 && cal.payoffCurveT0.length > 0 && diag.payoffCurveT0 && diag.payoffCurveT0.length > 0) {
+      renderCompareChart(cal, diag);
+    }
   } catch (e) { showError(el, e.message); }
+}
+
+function renderMetRow(m, isCal) {
+  const wClass = m.winner === 'calendar' ? 'winner-cal' : m.winner === 'diagonal' ? 'winner-diag' : 'winner-tie';
+  const wLabel = m.winner === 'calendar' ? '📅' : m.winner === 'diagonal' ? '📐' : '⚖️';
+  const calCls = m.winner === 'calendar' ? 'positive' : '';
+  const diagCls = m.winner === 'diagonal' ? 'positive' : '';
+  const isPct = m.label === 'Prob. de Ganancia';
+  const isDte = m.label.startsWith('DTE');
+  return `<tr>
+    <td>${m.label}</td>
+    <td class="${calCls}">${isPct ? fmt(m.calendar*100,1)+'%' : (isDte ? fmt(m.calendar,0)+'d' : (m.label==='Costo Neto'||m.label==='Pérdida Máxima'||m.label==='Ganancia Máxima' ? '$'+fmt(m.calendar) : fmt(m.calendar)))}</td>
+    <td class="${diagCls}">${isPct ? fmt(m.diagonal*100,1)+'%' : (isDte ? fmt(m.diagonal,0)+'d' : (m.label==='Costo Neto'||m.label==='Pérdida Máxima'||m.label==='Ganancia Máxima' ? '$'+fmt(m.diagonal) : fmt(m.diagonal)))}</td>
+    <td class="reason-cell"><span class="winner-badge ${wClass}">${wLabel} ${m.winner.toUpperCase()}</span> ${m.reason}</td>
+  </tr>`;
+}
+
+function renderCompareChart(cal, diag) {
+  const canvas = document.getElementById('cmp-chart');
+  if (!canvas) return;
+
+  // Destroy previous chart if exists
+  if (window._cmpChart) { window._cmpChart.destroy(); }
+
+  const green = '#22c55e';
+  const blue = '#38bdf8';
+  const calT0 = (cal.payoffCurveT0 || []).map(p => ({ x: p.price, y: p.pnl }));
+  const calExp = (cal.payoffCurveExpiration || []).map(p => ({ x: p.price, y: p.pnl }));
+  const diagT0 = (diag.payoffCurveT0 || []).map(p => ({ x: p.price, y: p.pnl }));
+  const diagExp = (diag.payoffCurveExpiration || []).map(p => ({ x: p.price, y: p.pnl }));
+
+  const allPrices = [...calT0, ...calExp, ...diagT0, ...diagExp].map(p => p.x);
+  const xMin = Math.min(...allPrices);
+  const xMax = Math.max(...allPrices);
+
+  const annotations = {
+    line0: {
+      type: 'line', yMin: 0, yMax: 0,
+      borderColor: '#64748b', borderWidth: 1, borderDash: [3,3],
+      label: { display: false },
+    },
+    currentPrice: {
+      type: 'line',
+      xMin: cal.currentPrice, xMax: cal.currentPrice,
+      borderColor: '#f59e0b', borderWidth: 2,
+      label: {
+        display: true, content: 'Precio Actual $' + fmt(cal.currentPrice,1),
+        position: 'start', backgroundColor: '#f59e0b', color: '#0f172a',
+        font: { weight: 'bold', size: 10 },
+      },
+    },
+  };
+
+  // Add break-even annotations
+  (cal.breakEvens || []).forEach((be, i) => {
+    annotations['be_cal_' + i] = {
+      type: 'point', xValue: be, yValue: 0,
+      backgroundColor: green, radius: 5,
+      label: { display: true, content: 'BE $' + fmt(be,1), position: 'below', backgroundColor: green, color: '#0f172a', font: { size: 9 } },
+    };
+  });
+  (diag.breakEvens || []).forEach((be, i) => {
+    annotations['be_diag_' + i] = {
+      type: 'point', xValue: be, yValue: 0,
+      backgroundColor: blue, radius: 5,
+      label: { display: true, content: 'BE $' + fmt(be,1), position: 'above', backgroundColor: blue, color: '#0f172a', font: { size: 9 } },
+    };
+  });
+
+  window._cmpChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      datasets: [
+        {
+          label: 'Calendar (Hoy)',
+          data: calT0,
+          borderColor: green,
+          backgroundColor: green + '33',
+          borderDash: [6,4],
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.3,
+        },
+        {
+          label: 'Calendar (Exp. Short)',
+          data: calExp,
+          borderColor: green,
+          backgroundColor: green + '11',
+          borderWidth: 3,
+          pointRadius: 0,
+          tension: 0.3,
+        },
+        {
+          label: 'Diagonal (Hoy)',
+          data: diagT0,
+          borderColor: blue,
+          backgroundColor: blue + '33',
+          borderDash: [6,4],
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.3,
+        },
+        {
+          label: 'Diagonal (Exp. Short)',
+          data: diagExp,
+          borderColor: blue,
+          backgroundColor: blue + '11',
+          borderWidth: 3,
+          pointRadius: 0,
+          tension: 0.3,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'top',
+          labels: { color: '#94a3b8', font: { size: 11 }, usePointStyle: true, pointStyle: 'line' },
+        },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          titleColor: '#f1f5f9',
+          bodyColor: '#94a3b8',
+          borderColor: '#334155',
+          borderWidth: 1,
+          callbacks: {
+            label: function(ctx) {
+              return ctx.dataset.label + ' → Precio: $' + fmt(ctx.parsed.x,1) + ' | P&L: $' + fmt(ctx.parsed.y);
+            },
+          },
+        },
+        annotation: {
+          annotations: annotations,
+        },
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Precio del Subyacente ($)', color: '#94a3b8' },
+          grid: { color: '#1e293b' },
+          ticks: { color: '#64748b' },
+          min: xMin,
+          max: xMax,
+        },
+        y: {
+          title: { display: true, text: 'P&L ($)', color: '#94a3b8' },
+          grid: { color: '#1e293b' },
+          ticks: { color: '#64748b' },
+        },
+      },
+    },
+  });
 }
 
 function buildMonteCarloSection(mc) {

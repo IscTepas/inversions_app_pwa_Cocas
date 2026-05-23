@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import path from "path";
 import swaggerUi from "swagger-ui-express";
 import { initializeEnvironment } from "./config/environment";
 import { printValidationResult, validateEnvironment } from "./config/envValidator";
@@ -86,6 +87,9 @@ app.get("/health", (_req, res) => {
 app.get("/api/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
 });
+
+// Serve PWA frontend static files for easy testing (alternative to Vite dev server)
+app.use(express.static(path.join(__dirname, "../../../pwa/inversions_app/public")));
 
 const port = Number(process.env.PORT ?? 3000);
 

@@ -14,6 +14,8 @@ import type { CalendarSpreadResult, CalendarStressTest } from "./calendarSpreadE
 import type { RiskProfile, DiagonalStressTest } from "./diagonalSpreadEngine";
 import type { SimulationResult, DeterministicScenario, MonteCarloResult } from "./termSimulationEngine";
 import type { RiskAnalysis } from "./termRiskEngine";
+import type { TermLeg } from "./termStrategyContract";
+import { blackScholesPrice } from "./termUtils";
 
 /** Punto individual de la curva de payoff: precio subyacente, valor estrategia, P&L */
 export interface PayoffCurvePoint {
@@ -334,5 +336,38 @@ export class TermReportEngine {
    *  Positivo = debito (pagas), negativo = credito (recibes). */
   static calculateNetCost(legs: Array<{ premium: number; contracts: number }>): number {
     return legs.reduce((sum, leg) => sum + leg.premium * leg.contracts, 0);
+  }
+
+  /** Genera la curva de payoff al vencimiento de la pata corta.
+   *  Short leg = valor intrinseco (T=0). Long leg = BS con DTE remanente.
+   *  Usado por el comparador para el overlay chart (linea solida = expiracion). */
+  static generatePayoffAtExpiration(
+    legs: TermLeg[],
+    initialCost: number,
+    riskFreeRate: number,
+    longIv: number,
+    remainingDte: number,
+    priceRange?: { min: number; max: number; steps: number }
+  ): PayoffCurvePoint[] {
+    if (legs.length < 2) return [];
+    const sorted = [...legs].sort((a, b) => a.expiration.getTime() - b.expiration.getTime());
+    const shortLeg = sorted[0];
+    const longLeg = sorted[sorted.length - 1];
+    const contracts = shortLeg.contracts;
+    const remainingT = Math.max(remainingDte, 0) / 365;
+    const range = priceRange ?? { min: shortLeg.strike * 0.5, max: shortLeg.strike * 1.5, steps: 50 };
+    const step = (range.max - range.min) / (range.steps - 1);
+    const curve: PayoffCurvePoint[] = [];
+
+    for (let i = 0; i < range.steps; i++) {
+      const S = Number((range.min + i * step).toFixed(2));
+      const shortValue = blackScholesPrice(S, shortLeg.strike, 0, riskFreeRate, 0, shortLeg.optionStyle);
+      const longValue = blackScholesPrice(S, longLeg.strike, remainingT, riskFreeRate, longIv, longLeg.optionStyle);
+      const strategyValue = (shortValue + longValue) * contracts;
+      const pnl = Number((strategyValue - initialCost).toFixed(2));
+      const payoff = Number(strategyValue.toFixed(2));
+      curve.push({ price: S, payoff, pnl });
+    }
+    return curve;
   }
 }

@@ -895,6 +895,8 @@ Expandir el endpoint /compare y su UI en term-verify.html para mostrar 3 bloques
 - [X] T208.4 Ejecutar Monte Carlo + deterministic scenarios + report engine dentro del comparator para enriquecer datos
 - [X] T208.5 Actualizar term-verify.html: reemplazar las 5 metricas planas con tabla side-by-side de 3 bloques
 - [X] T208.6 Integrar helpers calculateBreakEvens y calculateNetCost en el flujo
+- [X] T208.7 Agregar campo underlyingPrice en CompareRequest y formulario frontend
+- [X] T208.8 Exponer ruta estatica para term-verify.html desde backend (express.static)
 
 **Criterios de aceptacion:**
 - POST /compare retorna calendar y diagonal con los 3 bloques completos
@@ -924,6 +926,7 @@ Agregar metodos estaticos calculateBreakEvens (encuentra precios donde P&L cruza
 - [X] T209.1 Implementar calculateBreakEvens(curve: PayoffCurvePoint[]): number[] con interpolacion lineal entre pares consecutivos donde pnl cambia de signo
 - [X] T209.2 Implementar calculateNetCost(legs): number como reduce de premium*contracts
 - [X] T209.3 Manejar casos borde: curva < 2 puntos, sin cruce por cero
+- [X] T209.4 Tests unitarios para generatePayoffAtExpiration: casos normales, borde, multi-contrato, puts
 
 **Criterios de aceptacion:**
 - calculateBreakEvens retorna precios break-even correctos

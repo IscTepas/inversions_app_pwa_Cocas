@@ -410,6 +410,93 @@ describe("TermReportEngine", () => {
     });
   });
 
+  /** Tests de generatePayoffAtExpiration: static method for comparator overlay chart */
+  describe("generatePayoffAtExpiration", () => {
+    const mockLegs = [
+      { strike: 100, expiration: new Date("2026-06-19"), premium: 2.5, contracts: 1, optionStyle: "call" as const },
+      { strike: 100, expiration: new Date("2026-09-18"), premium: 5.0, contracts: 1, optionStyle: "call" as const },
+    ];
+    const riskFreeRate = 0.05;
+    const longIv = 0.2;
+    const remainingDte = 60;
+
+    it("should return empty array when fewer than 2 legs", () => {
+      const curve = TermReportEngine.generatePayoffAtExpiration([mockLegs[0]], 7.5, riskFreeRate, longIv, remainingDte);
+      expect(curve).toEqual([]);
+    });
+
+    it("should return empty array when no legs", () => {
+      const curve = TermReportEngine.generatePayoffAtExpiration([], 7.5, riskFreeRate, longIv, remainingDte);
+      expect(curve).toEqual([]);
+    });
+
+    it("should generate curve with default 50 points", () => {
+      const curve = TermReportEngine.generatePayoffAtExpiration(mockLegs, 7.5, riskFreeRate, longIv, remainingDte);
+      expect(curve.length).toBe(50);
+    });
+
+    it("should generate curve with custom price range", () => {
+      const curve = TermReportEngine.generatePayoffAtExpiration(mockLegs, 7.5, riskFreeRate, longIv, remainingDte, { min: 80, max: 120, steps: 10 });
+      expect(curve.length).toBe(10);
+      expect(curve[0].price).toBe(80);
+      expect(curve[curve.length - 1].price).toBe(120);
+    });
+
+    it("should compute correct pnl = strategyValue - initialCost", () => {
+      const curve = TermReportEngine.generatePayoffAtExpiration(mockLegs, 7.5, riskFreeRate, longIv, remainingDte, { min: 99, max: 101, steps: 3 });
+      for (const point of curve) {
+        expect(point.pnl).toBeCloseTo(point.payoff - 7.5, 1);
+      }
+    });
+
+    it("should return points with price, payoff, and pnl fields", () => {
+      const curve = TermReportEngine.generatePayoffAtExpiration(mockLegs, 7.5, riskFreeRate, longIv, remainingDte, { min: 90, max: 110, steps: 5 });
+      for (const point of curve) {
+        expect(point).toHaveProperty("price");
+        expect(point).toHaveProperty("payoff");
+        expect(point).toHaveProperty("pnl");
+        expect(typeof point.price).toBe("number");
+        expect(typeof point.payoff).toBe("number");
+        expect(typeof point.pnl).toBe("number");
+      }
+    });
+
+    it("should increase payoff as price moves in-the-money for calls", () => {
+      const curve = TermReportEngine.generatePayoffAtExpiration(mockLegs, 7.5, riskFreeRate, longIv, remainingDte, { min: 80, max: 120, steps: 10 });
+      const midIdx = Math.floor(curve.length / 2);
+      expect(curve[curve.length - 1].payoff).toBeGreaterThan(curve[0].payoff);
+    });
+
+    it("should handle put options", () => {
+      const putLegs = [
+        { strike: 100, expiration: new Date("2026-06-19"), premium: 2.5, contracts: 1, optionStyle: "put" as const },
+        { strike: 100, expiration: new Date("2026-09-18"), premium: 5.0, contracts: 1, optionStyle: "put" as const },
+      ];
+      const curve = TermReportEngine.generatePayoffAtExpiration(putLegs, 7.5, riskFreeRate, longIv, remainingDte, { min: 80, max: 120, steps: 10 });
+      expect(curve.length).toBe(10);
+      // For puts, payoff should be higher at lower prices
+      expect(curve[0].payoff).toBeGreaterThan(curve[curve.length - 1].payoff);
+    });
+
+    it("should handle remainingDte = 0 (long leg at expiration)", () => {
+      const curve = TermReportEngine.generatePayoffAtExpiration(mockLegs, 7.5, riskFreeRate, longIv, 0, { min: 80, max: 120, steps: 5 });
+      expect(curve.length).toBe(5);
+      expect(curve.every(p => typeof p.pnl === "number")).toBe(true);
+    });
+
+    it("should handle multi-contract legs", () => {
+      const multiContractLegs = [
+        { strike: 100, expiration: new Date("2026-06-19"), premium: 2.5, contracts: 2, optionStyle: "call" as const },
+        { strike: 100, expiration: new Date("2026-09-18"), premium: 5.0, contracts: 2, optionStyle: "call" as const },
+      ];
+      const curve = TermReportEngine.generatePayoffAtExpiration(multiContractLegs, 15.0, riskFreeRate, longIv, remainingDte, { min: 105, max: 115, steps: 3 });
+      // At S > strike=100, calls have intrinsic value; 2 contracts scales payoff
+      for (const point of curve) {
+        expect(point.payoff).toBeGreaterThan(0);
+      }
+    });
+  });
+
   /** Tests de calculateRiskMetrics: stress test fields, expected shortfall */
   describe("riskMetrics extended fields", () => {
     it("should return stressTestMaxLoss and stressTestMaxGain with data", () => {

@@ -6,13 +6,15 @@ import { TermSimulationEngine } from "../../../modules/strategies/term/termSimul
 import { TermReportEngine } from "../../../modules/strategies/term/termReportEngine";
 import type { CalendarSpreadResult } from "../../../modules/strategies/term/calendarSpreadEngine";
 import type { RiskProfile } from "../../../modules/strategies/term/diagonalSpreadEngine";
-import type { RiskMetrics } from "../../../modules/strategies/term/termReportEngine";
+import type { RiskMetrics, PayoffCurvePoint } from "../../../modules/strategies/term/termReportEngine";
+import type { TermLeg } from "../../../modules/strategies/term/termStrategyContract";
 
 export interface CompareRequest {
   marketVolatility: "low" | "medium" | "high";
   timeHorizon: "short" | "medium" | "long";
   direction: "bullish" | "bearish" | "neutral";
   riskTolerance: "conservative" | "moderate" | "aggressive";
+  underlyingPrice?: number;
   calendarLegs: Array<{
     strike: number;
     expiration: string;
@@ -39,6 +41,18 @@ export interface StrategyMetrics {
   dte: { short: number; long: number };
   directionalProfile: string;
   riskMetrics: RiskMetrics;
+  currentPrice: number;
+  payoffCurveT0: PayoffCurvePoint[];
+  payoffCurveExpiration: PayoffCurvePoint[];
+}
+
+export interface MetricaRow {
+  label: string;
+  calendar: number;
+  diagonal: number;
+  winner: "calendar" | "diagonal" | "tie";
+  reason: string;
+  category: "capital" | "greeks" | "dte";
 }
 
 export interface CompareResponse {
@@ -47,6 +61,7 @@ export interface CompareResponse {
   scores: { calendar: number; diagonal: number };
   calendar: StrategyMetrics;
   diagonal: StrategyMetrics;
+  metricas: MetricaRow[];
 }
 
 export const termComparatorRouter = Router();
@@ -94,10 +109,12 @@ export const termComparatorRouter = Router();
  *         description: Error interno del servidor
  */
 
-function buildStrategyMetrics(
+function buildBaseMetrics(
   engineResult: CalendarSpreadResult | RiskProfile | null,
-  legs: Array<{ premium: number; contracts: number }>,
-  isCalendar: boolean
+  legs: Array<{ premium: number; contracts: number; strike: number; expiration: string; optionStyle: string }>,
+  isCalendar: boolean,
+  currentPrice: number,
+  riskFreeRate: number
 ): StrategyMetrics {
   const empty: StrategyMetrics = {
     cost: 0, maxLoss: 0, maxProfit: 0, breakEvens: [],
@@ -110,6 +127,9 @@ function buildStrategyMetrics(
       probabilityOfProfit: 0, maxDrawdown: 0, sharpeRatio: 0,
       stressTestMaxLoss: 0, stressTestMaxGain: 0, expectedShortfall: 0,
     },
+    currentPrice,
+    payoffCurveT0: [],
+    payoffCurveExpiration: [],
   };
 
   if (!engineResult) return empty;
@@ -120,16 +140,38 @@ function buildStrategyMetrics(
     "shortTheta" in engineResult
       ? (engineResult as CalendarSpreadResult).scenarios
       : (engineResult as RiskProfile).scenarios;
-  const payoffCurve = scenarios.map(s => ({
+  const payoffCurveT0 = scenarios.map(s => ({
     price: s.underlyingPrice,
     payoff: s.strategyValue,
     pnl: s.pnl,
   }));
-  const breakEvens = TermReportEngine.calculateBreakEvens(payoffCurve);
+  const breakEvens = TermReportEngine.calculateBreakEvens(payoffCurveT0);
 
   const pnls = scenarios.map(s => s.pnl).filter(p => !isNaN(p));
   const maxLoss = pnls.length > 0 ? Math.min(...pnls) : 0;
   const maxProfit = pnls.length > 0 ? Math.max(...pnls) : 0;
+
+  // Compute expiration curve
+  const termLegs: TermLeg[] = legs.map(l => ({
+    strike: l.strike,
+    expiration: new Date(l.expiration),
+    premium: l.premium,
+    contracts: l.contracts,
+    optionStyle: l.optionStyle as "call" | "put",
+  }));
+  const sorted = [...termLegs].sort((a, b) => a.expiration.getTime() - b.expiration.getTime());
+  const shortDte = isCalendar
+    ? (engineResult as CalendarSpreadResult).shortDte
+    : (engineResult as RiskProfile).shortDte;
+  const longDte = isCalendar
+    ? (engineResult as CalendarSpreadResult).longDte
+    : (engineResult as RiskProfile).longDte;
+  const remainingDte = longDte - shortDte;
+  const longIv = 0.25; // default IV for expiration pricing
+
+  const payoffCurveExpiration = TermReportEngine.generatePayoffAtExpiration(
+    termLegs, cost, riskFreeRate, longIv, remainingDte
+  );
 
   if (isCalendar) {
     const calResult = engineResult as CalendarSpreadResult;
@@ -139,7 +181,7 @@ function buildStrategyMetrics(
       maxLoss: Math.round(maxLoss * 100) / 100,
       maxProfit: Math.round(maxProfit * 100) / 100,
       breakEvens,
-      probabilityOfProfit: 0, // se calcula via report engine abajo
+      probabilityOfProfit: 0,
       greeks: { delta: g.delta, gamma: g.gamma, theta: g.theta, vega: g.vega },
       dte: { short: calResult.shortDte, long: calResult.longDte },
       directionalProfile: "neutral",
@@ -148,6 +190,9 @@ function buildStrategyMetrics(
         probabilityOfProfit: 0, maxDrawdown: 0, sharpeRatio: 0,
         stressTestMaxLoss: 0, stressTestMaxGain: 0, expectedShortfall: 0,
       },
+      currentPrice,
+      payoffCurveT0,
+      payoffCurveExpiration,
     };
   }
 
@@ -167,6 +212,9 @@ function buildStrategyMetrics(
       probabilityOfProfit: 0, maxDrawdown: 0, sharpeRatio: 0,
       stressTestMaxLoss: 0, stressTestMaxGain: 0, expectedShortfall: 0,
     },
+    currentPrice,
+    payoffCurveT0,
+    payoffCurveExpiration,
   };
 }
 
@@ -175,15 +223,119 @@ function enrichWithRiskMetrics(
   reportEngine: TermReportEngine
 ): StrategyMetrics {
   const riskMetrics = reportEngine.calculateRiskMetrics();
-  const stressTests = reportEngine.generateStressTestSummary();
-  const stressPnls = stressTests.map(s => s.pnl).filter(p => !isNaN(p));
   return {
     ...base,
     probabilityOfProfit: riskMetrics.probabilityOfProfit,
-    riskMetrics: {
-      ...riskMetrics,
-    },
+    riskMetrics: { ...riskMetrics },
   };
+}
+
+function pickBetter(
+  calVal: number,
+  diagVal: number,
+  lowerIsBetter: boolean,
+  tieThreshold: number = 0.001
+): "calendar" | "diagonal" | "tie" {
+  if (Math.abs(calVal - diagVal) < tieThreshold) return "tie";
+  if (lowerIsBetter) return calVal < diagVal ? "calendar" : "diagonal";
+  return calVal > diagVal ? "calendar" : "diagonal";
+}
+
+function determineMetricas(
+  cal: StrategyMetrics,
+  diag: StrategyMetrics,
+  direction: string,
+  riskTolerance: string
+): MetricaRow[] {
+  const rows: MetricaRow[] = [];
+
+  const capitalRows: Array<{
+    label: string; key: keyof Pick<StrategyMetrics, "cost" | "maxLoss" | "maxProfit" | "probabilityOfProfit">; lowerIsBetter: boolean; reasonTpl: (w: string) => string
+  }> = [
+    { label: "Costo Neto", key: "cost", lowerIsBetter: true, reasonTpl: w => `${w === "calendar" ? "Menor" : "Mayor"} costo → menos capital en riesgo` },
+    { label: "Pérdida Máxima", key: "maxLoss", lowerIsBetter: false, reasonTpl: w => `Menor pérdida máxima → mejor control de riesgo` },
+    { label: "Ganancia Máxima", key: "maxProfit", lowerIsBetter: false, reasonTpl: w => `Mayor ganancia máxima → mejor potencial de retorno` },
+    { label: "Prob. de Ganancia", key: "probabilityOfProfit", lowerIsBetter: false, reasonTpl: w => `POP más alto → mayor probabilidad de éxito estadístico` },
+  ];
+
+  for (const r of capitalRows) {
+    const w = pickBetter(Number(cal[r.key]), Number(diag[r.key]), r.lowerIsBetter);
+    rows.push({
+      label: r.label,
+      calendar: Number(cal[r.key]),
+      diagonal: Number(diag[r.key]),
+      winner: w,
+      reason: w === "tie" ? "Sin diferencia significativa" : r.reasonTpl(w),
+      category: "capital",
+    });
+  }
+
+  // Greeks
+  const greekKeys: Array<{ label: string; key: "delta" | "gamma" | "theta" | "vega"; reasonTpl: (w: string) => string }> = [
+    {
+      label: "Delta (Δ)",
+      key: "delta",
+      reasonTpl: w => {
+        if (direction === "neutral") return w === "calendar" ? "Delta más cercano a 0 → neutral" : "Delta más direccional → puede no alinearse con outlook neutral";
+        if (direction === "bullish") return w === "diagonal" ? "Delta positivo mayor → mejor alineado con outlook alcista" : "Delta neutral → no captura dirección alcista";
+        return w === "diagonal" ? "Delta negativo mayor → mejor alineado con outlook bajista" : "Delta neutral → no captura dirección bajista";
+      },
+    },
+    {
+      label: "Gamma (Γ)",
+      key: "gamma",
+      reasonTpl: w => w === "calendar" ? "Menor gamma → menor riesgo de convexidad" : "Mayor gamma → mayor sensibilidad a cambios de precio",
+    },
+    {
+      label: "Theta (θ)",
+      key: "theta",
+      reasonTpl: w => w === "calendar" ? "Theta más positivo → mayor beneficio por decaimiento temporal" : "Theta más positivo → mayor beneficio por paso del tiempo",
+    },
+    {
+      label: "Vega (ν)",
+      key: "vega",
+      reasonTpl: w => riskTolerance === "conservative"
+        ? (w === "calendar" ? "Menor vega → menos riesgo por cambios en IV" : "Mayor vega → más exposición a cambios en IV")
+        : (w === "diagonal" ? "Mayor vega → mejor para entornos de alta volatilidad" : "Menor vega → menos beneficio en alta volatilidad"),
+    },
+  ];
+
+  for (const g of greekKeys) {
+    const calG = cal.greeks[g.key];
+    const diagG = diag.greeks[g.key];
+    const lowerIsBetter = g.key !== "theta";
+    const w = pickBetter(calG, diagG, lowerIsBetter);
+    rows.push({
+      label: g.label,
+      calendar: calG,
+      diagonal: diagG,
+      winner: w,
+      reason: w === "tie" ? "Sin diferencia significativa" : g.reasonTpl(w),
+      category: "greeks",
+    });
+  }
+
+  // DTE
+  const dteW = pickBetter(cal.dte.short, diag.dte.short, false);
+  rows.push({
+    label: "DTE Corto",
+    calendar: cal.dte.short,
+    diagonal: diag.dte.short,
+    winner: dteW,
+    reason: dteW === "tie" ? "Mismo DTE corto" : `Mayor DTE corto → más tiempo para gestionar la posición`,
+    category: "dte",
+  });
+  const dteLongW = pickBetter(cal.dte.long, diag.dte.long, false);
+  rows.push({
+    label: "DTE Largo",
+    calendar: cal.dte.long,
+    diagonal: diag.dte.long,
+    winner: dteLongW,
+    reason: dteLongW === "tie" ? "Mismo DTE largo" : `Mayor DTE largo → más tiempo de vida para la estrategia`,
+    category: "dte",
+  });
+
+  return rows;
 }
 
 termComparatorRouter.post("/compare", (req, res) => {
@@ -194,6 +346,9 @@ termComparatorRouter.post("/compare", (req, res) => {
       res.status(400).json({ error: "Both calendarLegs and diagonalLegs are required" });
       return;
     }
+
+    const riskFreeRate = 0.05;
+    const currentPrice = body.underlyingPrice ?? body.calendarLegs[0]?.strike ?? 100;
 
     const calendarContract = new TermStrategyContract({
       legs: body.calendarLegs.map(l => ({ ...l, expiration: new Date(l.expiration) })),
@@ -211,11 +366,9 @@ termComparatorRouter.post("/compare", (req, res) => {
     const calResult = calValidation.isValid ? calEngine.analyze() : null;
     const diagResult = diagValidation.isValid ? diagEngine.analyze() : null;
 
-    // Build base metrics
-    let calMetrics = buildStrategyMetrics(calResult, body.calendarLegs, true);
-    let diagMetrics = buildStrategyMetrics(diagResult, body.diagonalLegs, false);
+    let calMetrics = buildBaseMetrics(calResult, body.calendarLegs, true, currentPrice, riskFreeRate);
+    let diagMetrics = buildBaseMetrics(diagResult, body.diagonalLegs, false, currentPrice, riskFreeRate);
 
-    // Enrich with report engine data if we have scenarios
     if (calResult) {
       const simEngine = new TermSimulationEngine(calendarContract, calEngine, null);
       const simResult = {
@@ -255,6 +408,8 @@ termComparatorRouter.post("/compare", (req, res) => {
 
     const recommendation = calendarScore >= diagonalScore ? "calendar" : "diagonal";
 
+    const metricas = determineMetricas(calMetrics, diagMetrics, body.direction, body.riskTolerance);
+
     const justification = recommendation === "calendar"
       ? `Calendar spread recommended for ${body.marketVolatility} volatility, ${body.timeHorizon} horizon, ${body.direction} outlook. Lower cost ($${calMetrics.cost} vs $${diagMetrics.cost}), neutral delta (${calMetrics.greeks.delta}), and higher POP (${(calMetrics.probabilityOfProfit * 100).toFixed(0)}% vs ${(diagMetrics.probabilityOfProfit * 100).toFixed(0)}%).`
       : `Diagonal spread recommended for ${body.marketVolatility} volatility, ${body.timeHorizon} horizon, ${body.direction} outlook. Directional delta (${diagMetrics.greeks.delta}) aligns with bias, higher max profit ($${diagMetrics.maxProfit} vs $${calMetrics.maxProfit}).`;
@@ -268,6 +423,7 @@ termComparatorRouter.post("/compare", (req, res) => {
       },
       calendar: calMetrics,
       diagonal: diagMetrics,
+      metricas,
     } as CompareResponse);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
