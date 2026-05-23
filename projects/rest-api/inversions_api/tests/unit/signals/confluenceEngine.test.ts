@@ -7,12 +7,15 @@ import {
 } from "../../../src/modules/signals/confluenceEngine";
 import type { SourceConfig } from "../../../src/modules/signals/sourceConfig";
 
+const techSource: SourceConfig = { id: "tech", name: "Technical", category: "TECHNICAL", weight: 1, enabled: true };
+const flowSource: SourceConfig = { id: "flow", name: "Flow", category: "FLOW", weight: 1, enabled: true };
+const aiSource: SourceConfig = { id: "ai", name: "AI", category: "AI", weight: 0.8, enabled: true };
+const newsSource: SourceConfig = { id: "news", name: "News", category: "NEWS", weight: 1, enabled: false };
+
 describe("confluenceEngine", () => {
   describe("evaluateConfluence", () => {
     it("should return HOLD signal when no verdicts provided", () => {
-      const sources: SourceConfig[] = [
-        { id: "tech", name: "Technical", weight: 1, enabled: true }
-      ];
+      const sources: SourceConfig[] = [techSource];
       const verdicts: SourceVerdict[] = [];
 
       const result = evaluateConfluence(sources, verdicts);
@@ -23,10 +26,7 @@ describe("confluenceEngine", () => {
     });
 
     it("should return BUY signal when weighted score is positive", () => {
-      const sources: SourceConfig[] = [
-        { id: "tech", name: "Technical", weight: 1, enabled: true },
-        { id: "flow", name: "Flow", weight: 1, enabled: true }
-      ];
+      const sources: SourceConfig[] = [techSource, flowSource];
       const verdicts: SourceVerdict[] = [
         { sourceId: "tech", verdict: "BUY", confidence: 0.8, rationale: "Uptrend" },
         { sourceId: "flow", verdict: "BUY", confidence: 0.7, rationale: "Strong inflow" }
@@ -40,9 +40,7 @@ describe("confluenceEngine", () => {
     });
 
     it("should return SELL signal when weighted score is negative", () => {
-      const sources: SourceConfig[] = [
-        { id: "tech", name: "Technical", weight: 1, enabled: true }
-      ];
+      const sources: SourceConfig[] = [techSource];
       const verdicts: SourceVerdict[] = [
         { sourceId: "tech", verdict: "SELL", confidence: 0.9, rationale: "Downtrend" }
       ];
@@ -55,8 +53,8 @@ describe("confluenceEngine", () => {
 
     it("should respect source weights in confluence calculation", () => {
       const sources: SourceConfig[] = [
-        { id: "tech", name: "Technical", weight: 2, enabled: true },
-        { id: "flow", name: "Flow", weight: 0.5, enabled: true }
+        { ...techSource, weight: 2 },
+        { ...flowSource, weight: 0.5 },
       ];
       const verdicts: SourceVerdict[] = [
         { sourceId: "tech", verdict: "BUY", confidence: 0.6, rationale: "Moderate uptrend" },
@@ -70,10 +68,7 @@ describe("confluenceEngine", () => {
     });
 
     it("should ignore verdicts from disabled sources", () => {
-      const sources: SourceConfig[] = [
-        { id: "tech", name: "Technical", weight: 1, enabled: true },
-        { id: "flow", name: "Flow", weight: 1, enabled: false }
-      ];
+      const sources: SourceConfig[] = [techSource, { ...flowSource, enabled: false }];
       const verdicts: SourceVerdict[] = [
         { sourceId: "tech", verdict: "BUY", confidence: 0.8, rationale: "Uptrend" },
         { sourceId: "flow", verdict: "SELL", confidence: 0.9, rationale: "Outflow (disabled)" }
@@ -87,9 +82,7 @@ describe("confluenceEngine", () => {
     });
 
     it("should cap confidence at 1.0", () => {
-      const sources: SourceConfig[] = [
-        { id: "tech", name: "Technical", weight: 1, enabled: true }
-      ];
+      const sources: SourceConfig[] = [techSource];
       const verdicts: SourceVerdict[] = [
         { sourceId: "tech", verdict: "BUY", confidence: 1.5, rationale: "Extreme confidence (over-cap)" }
       ];
@@ -102,11 +95,8 @@ describe("confluenceEngine", () => {
 
   describe("buildDashboardConfluencePayload", () => {
     it("should generate valid dashboard payload with single instrument", () => {
-      const sources: SourceConfig[] = [
-        { id: "tech", name: "Technical", weight: 1, enabled: true },
-        { id: "ai", name: "AI", weight: 0.8, enabled: true }
-      ];
-      const input = [
+      const sources: SourceConfig[] = [techSource, aiSource];
+      const input: Array<{ instrument: string; verdicts: SourceVerdict[] }> = [
         {
           instrument: "AAPL",
           verdicts: [
@@ -132,10 +122,8 @@ describe("confluenceEngine", () => {
     });
 
     it("should generate cards for multiple instruments in order", () => {
-      const sources: SourceConfig[] = [
-        { id: "tech", name: "Technical", weight: 1, enabled: true }
-      ];
-      const input = [
+      const sources: SourceConfig[] = [techSource];
+      const input: Array<{ instrument: string; verdicts: SourceVerdict[] }> = [
         {
           instrument: "AAPL",
           verdicts: [{ sourceId: "tech", verdict: "BUY", confidence: 0.7, rationale: "Up" }]
@@ -155,12 +143,10 @@ describe("confluenceEngine", () => {
     });
 
     it("should correctly resolve risk levels", () => {
-      const sources: SourceConfig[] = [
-        { id: "tech", name: "Technical", weight: 1, enabled: true }
-      ];
+      const sources: SourceConfig[] = [techSource];
 
       // High confidence high score = LOW risk
-      const lowRiskInput = [
+      const lowRiskInput: Array<{ instrument: string; verdicts: SourceVerdict[] }> = [
         {
           instrument: "HIGH_CONF",
           verdicts: [{ sourceId: "tech", verdict: "BUY", confidence: 1.0, rationale: "Very strong" }]
@@ -170,7 +156,7 @@ describe("confluenceEngine", () => {
       expect(lowRiskPayload.cards[0].riskLevel).toBe("LOW");
 
       // Medium confidence medium score = MEDIUM risk
-      const mediumRiskInput = [
+      const mediumRiskInput: Array<{ instrument: string; verdicts: SourceVerdict[] }> = [
         {
           instrument: "MEDIUM_CONF",
           verdicts: [{ sourceId: "tech", verdict: "BUY", confidence: 0.5, rationale: "Moderate" }]
@@ -180,7 +166,7 @@ describe("confluenceEngine", () => {
       expect(mediumRiskPayload.cards[0].riskLevel).toBe("MEDIUM");
 
       // Low confidence = HIGH risk
-      const highRiskInput = [
+      const highRiskInput: Array<{ instrument: string; verdicts: SourceVerdict[] }> = [
         {
           instrument: "LOW_CONF",
           verdicts: [{ sourceId: "tech", verdict: "HOLD", confidence: 0.2, rationale: "Weak" }]
@@ -192,11 +178,11 @@ describe("confluenceEngine", () => {
 
     it("should only include enabled cores in activeCores", () => {
       const sources: SourceConfig[] = [
-        { id: "tech", name: "Technical", weight: 1, enabled: true },
-        { id: "flow", name: "Flow", weight: 1, enabled: false },
-        { id: "ai", name: "AI", weight: 1, enabled: true }
+        techSource,
+        { ...flowSource, enabled: false },
+        aiSource,
       ];
-      const input = [
+      const input: Array<{ instrument: string; verdicts: SourceVerdict[] }> = [
         {
           instrument: "TEST",
           verdicts: [{ sourceId: "tech", verdict: "BUY", confidence: 0.6, rationale: "Test" }]
@@ -211,11 +197,11 @@ describe("confluenceEngine", () => {
 
     it("should include all evidence verdicts in cards", () => {
       const sources: SourceConfig[] = [
-        { id: "tech", name: "Technical", weight: 1, enabled: true },
-        { id: "flow", name: "Flow", weight: 1, enabled: true },
-        { id: "news", name: "News", weight: 1, enabled: false }
+        techSource,
+        flowSource,
+        newsSource,
       ];
-      const input = [
+      const input: Array<{ instrument: string; verdicts: SourceVerdict[] }> = [
         {
           instrument: "FULL_EVIDENCE",
           verdicts: [
@@ -234,10 +220,8 @@ describe("confluenceEngine", () => {
     });
 
     it("should use current timestamp for generatedAt and updatedAt", () => {
-      const sources: SourceConfig[] = [
-        { id: "tech", name: "Technical", weight: 1, enabled: true }
-      ];
-      const input = [
+      const sources: SourceConfig[] = [techSource];
+      const input: Array<{ instrument: string; verdicts: SourceVerdict[] }> = [
         {
           instrument: "NOW",
           verdicts: [{ sourceId: "tech", verdict: "HOLD", confidence: 0.5, rationale: "Neutral" }]

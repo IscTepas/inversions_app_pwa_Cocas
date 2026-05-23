@@ -1,9 +1,19 @@
+/**
+ * diagonalSpread.ts — T168 (endpoint REST)
+ * Proposito: Ruta POST /api/v1/strategies/term/diagonal.
+ * Orquesta: TermStrategyContract (validacion) -> DiagonalSpreadEngine (analisis con griegas)
+ *           -> TermSimulationEngine (Monte Carlo + deterministico)
+ *           -> TermReportEngine (reporte estructurado).
+ * Llamado por: src/index.ts (registra el router en /api/v1/strategies/term linea 64)
+ * Dependencias: termStrategyContract, diagonalSpreadEngine, termSimulationEngine, termReportEngine
+ */
 import { Router } from "express";
 import { TermStrategyContract } from "../../../modules/strategies/term/termStrategyContract";
 import { DiagonalSpreadEngine } from "../../../modules/strategies/term/diagonalSpreadEngine";
 import { TermSimulationEngine } from "../../../modules/strategies/term/termSimulationEngine";
 import { TermReportEngine } from "../../../modules/strategies/term/termReportEngine";
 
+/** Request body para POST /diagonal */
 export interface DiagonalRequest {
   legs: Array<{
     strike: number;
@@ -72,6 +82,7 @@ export const diagonalSpreadRouter = Router();
  *       500:
  *         description: Error interno del servidor
  */
+/** POST /diagonal: valida contrato, verifica que sea diagonal (strikes distintos), analiza, simula, genera reporte. Llamado desde src/index.ts linea 64 */
 diagonalSpreadRouter.post("/diagonal", (req, res) => {
   try {
     const body = req.body as DiagonalRequest;

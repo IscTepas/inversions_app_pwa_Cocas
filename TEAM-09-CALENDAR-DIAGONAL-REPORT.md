@@ -1,6 +1,21 @@
 # Reporte de Implementación — Calendar Spread & Diagonal Spread
 ## TEAM-09 — SquadISC
 
+<!--
+  ARCHIVO: TEAM-09-CALENDAR-DIAGONAL-REPORT.md
+  PROPOSITO: Reporte consolidado de la implementacion del feature Calendar/Diagonal Spread
+  por TEAM-09. Incluye journey completo, detalle por modulo, resultados de validacion,
+  gaps, y trazabilidad Diana ↔ Speckit ↔ Codigo.
+  GENERADO POR: Proceso manual post-implementacion (2026-05-19)
+  RELACIONES:
+    - spec.md  (especificacion del feature)
+    - plan.md  (plan operativo)
+    - tasks.md (backlog con 85 sub-tareas)
+    - team-roster.md, team-task-allocation.md, team-agent-bootstrap.md (canon Diana)
+    - Modulos .ts en projects/rest-api/inversions_api/src/modules/strategies/term/
+    - Rutas .ts en projects/rest-api/inversions_api/src/routes/strategies/term/
+    - Tests en projects/rest-api/inversions_api/tests/
+-->
 | Campo | Valor |
 |-------|-------|
 | **Proyecto** | diana-inversions |
@@ -504,6 +519,76 @@ Select-String -Path specs/010-team-09-calendar-diagonal/tasks.md -Pattern "\[ \]
 - [ ] **G-T09-02:** Validar reglas de roll con politica de riesgo institucional
 - [ ] **G-T09-03:** Coordinar con TEAM-01 formato de metricas theta para UI/dashboard
 - [ ] **Opcional:** En futuras rondas, usar `/speckit.implement` directamente para mantener trazabilidad granular commit-por-tarea
+
+---
+
+## 11. Trazabilidad Diana ↔ Speckit ↔ Codigo
+
+### Cadena de generacion de artefactos
+
+```
+Diana Canon (teams/TEAM-09/)
+  ├── spec.md ──> speckit.specify ──> specs/010-team-09-calendar-diagonal/spec.md
+  ├── plan.md ──> speckit.plan    ──> specs/010-team-09-calendar-diagonal/plan.md
+  └── tasks.md ──> speckit.tasks  ──> specs/010-team-09-calendar-diagonal/tasks.md
+  
+Diana Canon (speckit/)
+  ├── team-roster.md           ──> /diana.teams action="generate"
+  ├── team-task-allocation.md  ──> /diana.teams action="generate"
+  └── team-agent-bootstrap.md  ──> /diana.teams action="generate"
+
+  └──> speckit.implement ──> Implementacion en projects/rest-api/inversions_api/
+                              ├── src/modules/strategies/term/ (9 modulos)
+                              ├── src/routes/strategies/term/  (3 rutas)
+                              └── tests/ (9 archivos de test)
+```
+
+### Mapeo Tarea → Archivo → Llamadas
+
+| Tarea | Archivo | Quien lo llama | Dependencias |
+|-------|---------|---------------|--------------|
+| **T162** | `termStrategyContract.ts` | calendarSpreadEngine, diagonalSpreadEngine, termSimulationEngine, termRiskEngine, termRollOrchestrator, 3 rutas REST | Ninguna |
+| **T163** | `calendarSpreadEngine.ts` | termSimulationEngine, calendarSpread.ts (ruta), termComparator.ts (ruta) | T162, termUtils |
+| **T164** | `diagonalSpreadEngine.ts` | termSimulationEngine, diagonalSpread.ts (ruta), termComparator.ts (ruta) | T162, termUtils |
+| **T165** | `termSimulationEngine.ts` | calendarSpread.ts (ruta), diagonalSpread.ts (ruta) | T163, T164, termUtils |
+| **T166** | `termRiskEngine.ts` | termRollOrchestrator (tipo RiskAnalysis) | T162, termUtils |
+| **T169** | `termRollOrchestrator.ts` | (modulo interno, disponible para orquestacion global) | T162, termUtils, T166 |
+| **T167** | `termReportEngine.ts` | calendarSpread.ts (ruta), diagonalSpread.ts (ruta) | T163, T164, T165, T166 (tipos) |
+| **T168** | `calendarSpread.ts`, `diagonalSpread.ts`, `termComparator.ts` | index.ts (lineas 63-65) | T162, T163, T164, T165, T167 |
+| **S-T09-C01** | `termChatAssistant.ts` | (modulo interno, disponible para Chat IA frontend) | T163, T164, T165, T166 (tipos) |
+| **Utilidad** | `termUtils.ts` | Todos los modulos del grupo term | tipo OptionStyle de T162 |
+
+### Estado de cobertura de tests
+
+| Archivo test | Tarea | Tests | Cobertura minima | Estado |
+|-------------|-------|-------|-----------------|--------|
+| `termStrategyContract.test.ts` | T162/T200 | 24 | >=80% | ✅ |
+| `calendarSpreadEngine.test.ts` | T196 | 12 | >=80% | ✅ |
+| `diagonalSpreadEngine.test.ts` | T196 | 12 | >=80% | ✅ |
+| `termSimulationEngine.test.ts` | T197 | 14 | >=80% | ✅ |
+| `termRiskEngine.test.ts` | T197 | 12 | >=80% | ✅ |
+| `termRollOrchestrator.test.ts` | T197 | 12 | >=80% | ✅ |
+| `termReportEngine.test.ts` | T203 | 9 | >=80% branch | ⚠️ Branch 52.77% |
+| `termChatAssistant.test.ts` | T202 | 9 | >=80% | ⚠️ Stmts 54.41% |
+| `termRoutes.test.ts` | T198 | 7 | >=80% | ✅ |
+
+### Contratos de integracion consumidos por TEAM-09
+
+| Contrato | Tipo | Propietario |
+|----------|------|-------------|
+| `auth-context.md` | Entrada | TEAM-01 (DIANArchiTEC) |
+| `broker-adapter.md` | Entrada | TEAM-01 (DIANArchiTEC) |
+| `signal-lifecycle.md` | Entrada | TEAM-06 (CodersTMNT) |
+
+### Skills cargadas para TEAM-09 (desde team-agent-bootstrap.md)
+
+| Skill ID | Nombre | Uso en TEAM-09 |
+|----------|--------|----------------|
+| 004-inv-options-strategy-engine | Options Strategy Engine | Motor Black-Scholes + griegas |
+| 008-inv-market-data-and-realtime | Market Data and Realtime | Precios y datos de mercado para simulacion |
+| 010-inv-broker-integration-ibkr-alpaca | Broker Integration IBKR/Alpaca | Contratos de integracion con broker |
+| 011-inv-portfolio-and-performance-analytics | Portfolio and Performance Analytics | Metricas de riesgo/beneficio |
+| 012-inv-compliance-audit-retention | Compliance Audit Retention | RNF-001 (no auto-trading) |
 
 ---
 

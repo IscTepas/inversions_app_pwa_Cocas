@@ -1,8 +1,14 @@
+/**
+ * Tests de termReportEngine.ts — T203 (cobertura branch >=80%)
+ * Cobertura: curva de payoff, superficie tiempo-precio-IV, metricas de riesgo,
+ * reporte estructurado para calendar y diagonal, casos borde (datos nulos/parciales).
+ * Modulo bajo prueba: TermReportEngine
+ */
 import { describe, it, expect } from "vitest";
 import { TermReportEngine } from "../../../../src/modules/strategies/term/termReportEngine";
-import type { CalendarSpreadResult } from "../../../../src/modules/strategies/term/calendarSpreadEngine";
-import type { RiskProfile } from "../../../../src/modules/strategies/term/diagonalSpreadEngine";
-import type { SimulationResult } from "../../../../src/modules/strategies/term/termSimulationEngine";
+import type { CalendarSpreadResult, CalendarStressTest } from "../../../../src/modules/strategies/term/calendarSpreadEngine";
+import type { RiskProfile, DiagonalStressTest } from "../../../../src/modules/strategies/term/diagonalSpreadEngine";
+import type { SimulationResult, MonteCarloResult } from "../../../../src/modules/strategies/term/termSimulationEngine";
 import type { RiskAnalysis } from "../../../../src/modules/strategies/term/termRiskEngine";
 
 const mockCalendarResult: CalendarSpreadResult = {
@@ -11,6 +17,7 @@ const mockCalendarResult: CalendarSpreadResult = {
   shortTheta: -5,
   longTheta: -3,
   netTheta: -2,
+  greeks: { delta: 0, gamma: 0, theta: -2, vega: 0 },
   scenarios: [
     { underlyingPrice: 80, strategyValue: 2, pnl: -1, theta: -2, impliedVolatility: 0.2 },
     { underlyingPrice: 90, strategyValue: 2.5, pnl: -0.5, theta: -2.5, impliedVolatility: 0.2 },
@@ -18,6 +25,7 @@ const mockCalendarResult: CalendarSpreadResult = {
     { underlyingPrice: 110, strategyValue: 2.5, pnl: -0.5, theta: -2.5, impliedVolatility: 0.2 },
     { underlyingPrice: 120, strategyValue: 2, pnl: -1, theta: -2, impliedVolatility: 0.2 },
   ],
+  stressTests: [],
 };
 
 const mockDiagonalResult: RiskProfile = {
@@ -33,29 +41,36 @@ const mockDiagonalResult: RiskProfile = {
   ],
   thetaDecayProfile: [],
   vegaShockProfile: [],
+  stressTests: [],
 };
 
 const mockSimResult: SimulationResult = {
+  strategy: "calendar",
+  optionStyle: "call",
   deterministic: [
     { label: "Price-10%_IV-10%", price: 90, ivShock: -0.1, dteRemaining: 30, strategyValue: 1, pnl: -2 },
     { label: "Price+0%_IV+0%", price: 100, ivShock: 0, dteRemaining: 30, strategyValue: 3, pnl: 0 },
   ],
   monteCarlo: null,
-  backtest: { sharpeRatio: 1.5, sortinoRatio: 1.2, maxDrawdown: 0.15, totalReturn: 0.25 },
+  backtest: { sharpeRatio: 1.5, sortinoRatio: 1.2, maxDrawdown: 0.15, totalReturn: 0.25, winRate: 0.6, totalTrades: 10, returns: [0.1, -0.05, 0.2], equityCurve: [100, 110, 105, 125] },
+  timestamp: new Date("2025-01-01"),
 };
 
 const mockRiskAnalysis: RiskAnalysis = {
   limitsViolation: true,
   violations: ["Theta limit exceeded"],
   earlyAssignmentRisk: null,
-  stopLossTriggered: false,
   stopLossRules: [
-    { currentDrawdown: 0.12, threshold: 0.15, triggered: false },
+    { type: "fixed", value: 0.15, currentDrawdown: 0.12, triggered: false, message: "Drawdown limit" },
   ],
   alerts: [],
+  portfolioExposure: 0.3,
+  thetaExposure: -2,
 };
 
+/** Tests de TermReportEngine: constructor, generatePayoffCurve, generateSurface, calculateRiskMetrics, generateReport, toJson */
 describe("TermReportEngine", () => {
+  /** Verifica que el constructor acepta calendar, diagonal o null */
   describe("constructor", () => {
     it("should accept calendar result", () => {
       const engine = new TermReportEngine(mockCalendarResult, null, null, null);
@@ -73,6 +88,7 @@ describe("TermReportEngine", () => {
     });
   });
 
+  /** Tests de generatePayoffCurve: calendar, diagonal, preferencia calendar, sin datos */
   describe("generatePayoffCurve", () => {
     it("should generate payoff curve from calendar result", () => {
       const engine = new TermReportEngine(mockCalendarResult, null, null, null);
@@ -103,6 +119,7 @@ describe("TermReportEngine", () => {
     });
   });
 
+  /** Tests de generateSurface: calendar, null sin calendar, empty scenarios, precios duplicados */
   describe("generateSurface", () => {
     it("should generate time-price-IV surface from calendar result", () => {
       const engine = new TermReportEngine(mockCalendarResult, null, null, null);
@@ -121,7 +138,7 @@ describe("TermReportEngine", () => {
 
     it("should return null when calendar has empty scenarios", () => {
       const emptyCal: CalendarSpreadResult = {
-        shortDte: 30, longDte: 90, shortTheta: 0, longTheta: 0, netTheta: 0, scenarios: [],
+        shortDte: 30, longDte: 90, shortTheta: 0, longTheta: 0, netTheta: 0, greeks: { delta: 0, gamma: 0, theta: 0, vega: 0 }, scenarios: [], stressTests: [],
       };
       const engine = new TermReportEngine(emptyCal, null, null, null);
       expect(engine.generateSurface()).toBeNull();
@@ -134,11 +151,13 @@ describe("TermReportEngine", () => {
         shortTheta: -5,
         longTheta: -3,
         netTheta: -2,
+        greeks: { delta: 0, gamma: 0, theta: -2, vega: 0 },
         scenarios: [
           { underlyingPrice: 100, strategyValue: 3, pnl: 0, theta: -3, impliedVolatility: 0.2 },
           { underlyingPrice: 100, strategyValue: 3, pnl: 0, theta: -3, impliedVolatility: 0.2 },
           { underlyingPrice: 110, strategyValue: 2, pnl: -1, theta: -2, impliedVolatility: 0.25 },
         ],
+        stressTests: [],
       };
       const engine = new TermReportEngine(dupCal, null, null, null);
       const surface = engine.generateSurface();
@@ -146,6 +165,7 @@ describe("TermReportEngine", () => {
     });
   });
 
+  /** Tests de calculateRiskMetrics: calendar, diagonal, Sharpe de backtest, maxDrawdown de riskAnalysis, zeros sin datos, PoP calendar/diagonal */
   describe("calculateRiskMetrics", () => {
     it("should return risk metrics from calendar result", () => {
       const engine = new TermReportEngine(mockCalendarResult, null, null, null);
@@ -197,12 +217,13 @@ describe("TermReportEngine", () => {
         limitsViolation: true,
         violations: [],
         earlyAssignmentRisk: null,
-        stopLossTriggered: false,
         stopLossRules: [
-          { currentDrawdown: 0.05, threshold: 0.1, triggered: false },
-          { currentDrawdown: 0.2, threshold: 0.15, triggered: true },
+          { type: "fixed", value: 0.1, currentDrawdown: 0.05, triggered: false, message: "Drawdown limit" },
+          { type: "fixed", value: 0.15, currentDrawdown: 0.2, triggered: true, message: "Drawdown limit" },
         ],
         alerts: [],
+        portfolioExposure: 0.3,
+        thetaExposure: -2,
       };
       const engine = new TermReportEngine(mockCalendarResult, null, null, multiRuleRisk);
       const metrics = engine.calculateRiskMetrics();
@@ -230,6 +251,7 @@ describe("TermReportEngine", () => {
     });
   });
 
+  /** Tests de generateReport: calendar, diagonal, unknown, deterministic scenarios, optionStyle put, surface null para diagonal */
   describe("generateReport", () => {
     it("should generate full structured report for calendar", () => {
       const engine = new TermReportEngine(mockCalendarResult, null, null, null);
@@ -282,6 +304,7 @@ describe("TermReportEngine", () => {
     });
   });
 
+  /** Tests de toJson: serializa correctamente calendar y diagonal */
   describe("toJson", () => {
     it("should return valid JSON string from calendar result", () => {
       const engine = new TermReportEngine(mockCalendarResult, null, null, null);
@@ -295,6 +318,155 @@ describe("TermReportEngine", () => {
       const json = engine.toJson();
       const parsed = JSON.parse(json);
       expect(parsed.strategy).toBe("diagonal");
+    });
+  });
+
+  /** Tests de generateStressTestSummary: con stress tests, sin stress tests */
+  describe("generateStressTestSummary", () => {
+    it("should return empty array when no stress tests in calendar", () => {
+      const engine = new TermReportEngine(mockCalendarResult, null, null, null);
+      expect(engine.generateStressTestSummary()).toEqual([]);
+    });
+
+    it("should return empty array when no stress tests in diagonal", () => {
+      const engine = new TermReportEngine(null, mockDiagonalResult, null, null);
+      expect(engine.generateStressTestSummary()).toEqual([]);
+    });
+
+    it("should return stress tests from calendar result with data", () => {
+      const calWithStress: CalendarSpreadResult = {
+        ...mockCalendarResult,
+        stressTests: [
+          { label: "Crash", description: "Market down 20%", underlyingPrice: 80, shortIv: 0.3, longIv: 0.3, strategyValue: 1, pnl: -2, theta: 0 },
+          { label: "Rally", description: "Market up 15%", underlyingPrice: 115, shortIv: 0.2, longIv: 0.2, strategyValue: 4, pnl: 1, theta: 0 },
+        ],
+      };
+      const engine = new TermReportEngine(calWithStress, null, null, null);
+      const summary = engine.generateStressTestSummary();
+      expect(summary).toHaveLength(2);
+      expect(summary[0].label).toBe("Crash");
+      expect(summary[0].pnl).toBe(-2);
+    });
+
+    it("should return stress tests from diagonal result with data", () => {
+      const diagWithStress: RiskProfile = {
+        ...mockDiagonalResult,
+        stressTests: [
+          { label: "Crash", description: "Market down 20%", underlyingPrice: 80, shortIv: 0.3, longIv: 0.3, strategyValue: 0.5, pnl: -2.5, greeks: { delta: -0.1, gamma: 0.01, theta: -1, vega: 3 } },
+        ],
+      };
+      const engine = new TermReportEngine(null, diagWithStress, null, null);
+      const summary = engine.generateStressTestSummary();
+      expect(summary).toHaveLength(1);
+      expect(summary[0].greeks).toBeDefined();
+      expect(summary[0].greeks!.delta).toBe(-0.1);
+    });
+  });
+
+  /** Tests de generateProbabilityCone: con MC, sin MC, sin DTE */
+  describe("generateProbabilityCone", () => {
+    it("should return empty array when no Monte Carlo data", () => {
+      const engine = new TermReportEngine(mockCalendarResult, null, null, null);
+      expect(engine.generateProbabilityCone()).toEqual([]);
+    });
+
+    it("should return empty array when pnlDistribution is too small", () => {
+      const simWithSmallMc: SimulationResult = {
+        strategy: "calendar",
+        optionStyle: "call",
+        deterministic: [],
+        monteCarlo: {
+          iterations: 10, distribution: "normal", meanPnl: 0, medianPnl: 0,
+          percentile5: -1, percentile95: 1, var95: -1, pnlDistribution: [0, 1, -1],
+        },
+        backtest: mockSimResult.backtest,
+        timestamp: mockSimResult.timestamp,
+      };
+      const engine = new TermReportEngine(mockCalendarResult, null, simWithSmallMc, null);
+      expect(engine.generateProbabilityCone()).toEqual([]);
+    });
+
+    it("should return cone point when Monte Carlo has sufficient data", () => {
+      const dist: number[] = [];
+      for (let i = 0; i < 200; i++) dist.push((Math.random() - 0.5) * 10);
+      const simWithMc: SimulationResult = {
+        strategy: "calendar",
+        optionStyle: "call",
+        deterministic: [],
+        monteCarlo: {
+          iterations: 200, distribution: "normal", meanPnl: 0, medianPnl: 0,
+          percentile5: -3, percentile95: 3, var95: -3, pnlDistribution: dist,
+        },
+        backtest: mockSimResult.backtest,
+        timestamp: mockSimResult.timestamp,
+      };
+      const engine = new TermReportEngine(mockCalendarResult, null, simWithMc, null);
+      const cone = engine.generateProbabilityCone();
+      expect(cone.length).toBe(1);
+      expect(cone[0].dte).toBe(30);
+      expect(cone[0].percentile5).toBeDefined();
+      expect(cone[0].median).toBeDefined();
+      expect(cone[0].percentile95).toBeDefined();
+    });
+  });
+
+  /** Tests de calculateRiskMetrics: stress test fields, expected shortfall */
+  describe("riskMetrics extended fields", () => {
+    it("should return stressTestMaxLoss and stressTestMaxGain with data", () => {
+      const calWithStress: CalendarSpreadResult = {
+        ...mockCalendarResult,
+        stressTests: [
+          { label: "Crash", description: "Crash", underlyingPrice: 80, shortIv: 0.3, longIv: 0.3, strategyValue: 1, pnl: -5, theta: 0 },
+          { label: "Rally", description: "Rally", underlyingPrice: 115, shortIv: 0.2, longIv: 0.2, strategyValue: 4, pnl: 3, theta: 0 },
+        ],
+      };
+      const engine = new TermReportEngine(calWithStress, null, null, null);
+      const metrics = engine.calculateRiskMetrics();
+      expect(metrics.stressTestMaxLoss).toBe(-5);
+      expect(metrics.stressTestMaxGain).toBe(3);
+    });
+
+    it("should return zero stress test metrics when no stress tests", () => {
+      const engine = new TermReportEngine(mockCalendarResult, null, null, null);
+      const metrics = engine.calculateRiskMetrics();
+      expect(metrics.stressTestMaxLoss).toBe(0);
+      expect(metrics.stressTestMaxGain).toBe(0);
+    });
+
+    it("should include expectedShortfall in diagonal metrics", () => {
+      const dist: number[] = [];
+      for (let i = 0; i < 200; i++) dist.push(-Math.abs(Math.random()) * 5);
+      const simWithMc: SimulationResult = {
+        strategy: "calendar",
+        optionStyle: "call",
+        deterministic: [],
+        monteCarlo: {
+          iterations: 200, distribution: "normal", meanPnl: -2, medianPnl: -1.5,
+          percentile5: -4, percentile95: 0, var95: -4, pnlDistribution: dist,
+        },
+        backtest: mockSimResult.backtest,
+        timestamp: mockSimResult.timestamp,
+      };
+      const engine = new TermReportEngine(null, mockDiagonalResult, simWithMc, null);
+      const metrics = engine.calculateRiskMetrics();
+      expect(metrics.expectedShortfall).toBeLessThan(0);
+    });
+  });
+
+  /** Tests de generateReport: incluye stressTests y probabilityCone */
+  describe("generateReport extended fields", () => {
+    it("should include stressTests array in report", () => {
+      const engine = new TermReportEngine(mockCalendarResult, null, null, null);
+      const report = engine.generateReport();
+      expect(report).toHaveProperty("stressTests");
+      expect(Array.isArray(report.stressTests)).toBe(true);
+    });
+
+    it("should include probabilityCone array in report", () => {
+      const engine = new TermReportEngine(mockCalendarResult, null, null, null);
+      const report = engine.generateReport();
+      expect(report).toHaveProperty("probabilityCone");
+      expect(Array.isArray(report.probabilityCone)).toBe(true);
     });
   });
 });

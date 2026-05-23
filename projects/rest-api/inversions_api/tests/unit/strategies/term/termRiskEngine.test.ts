@@ -1,12 +1,20 @@
+/**
+ * Tests de termRiskEngine.ts — T197 (tests unitarios simulacion y orquestador)
+ * Cobertura: limites de concentracion/expiracion/theta, asignacion temprana,
+ * stop-loss (fixed/percentage/trailing), alertas, portfolio exposure.
+ * Modulo bajo prueba: TermRiskEngine
+ */
 import { describe, it, expect } from "vitest";
 import { TermStrategyContract } from "../../../../src/modules/strategies/term/termStrategyContract";
 import { TermRiskEngine, calculatePortfolioExposure } from "../../../../src/modules/strategies/term/termRiskEngine";
 
+/** Tests de TermRiskEngine: constructor, analyze (limites concentracion/expiracion/theta, sin violaciones, alertas), stopLossRules, calculatePortfolioExposure */
 describe("TermRiskEngine", () => {
   const now = new Date();
   const shortExpiration = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   const longExpiration = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
 
+  /** Helper: crea un contrato calendar valido para pruebas de riesgo */
   function makeValidContract(): TermStrategyContract {
     return new TermStrategyContract({
       legs: [
@@ -17,6 +25,7 @@ describe("TermRiskEngine", () => {
     });
   }
 
+  /** Verifica que el constructor acepta contratos y limites personalizados */
   describe("constructor", () => {
     it("should accept a valid contract", () => {
       const engine = new TermRiskEngine(makeValidContract());
@@ -29,6 +38,7 @@ describe("TermRiskEngine", () => {
     });
   });
 
+  /** Tests de analyze: estructura, concentracion, expiracion, theta, sin violaciones, alertas */
   describe("analyze", () => {
     it("should return risk analysis", () => {
       const engine = new TermRiskEngine(makeValidContract());
@@ -91,6 +101,7 @@ describe("TermRiskEngine", () => {
     });
   });
 
+  /** Tests de stopLossRules: tipos (fixed/percentage/trailing) y estado triggered */
   describe("stopLossRules", () => {
     it("should include fixed, percentage, and trailing rules", () => {
       const engine = new TermRiskEngine(makeValidContract());
@@ -110,6 +121,7 @@ describe("TermRiskEngine", () => {
     });
   });
 
+  /** Tests de calculatePortfolioExposure: ratio prima/portafolio y portfolio=0 */
   describe("calculatePortfolioExposure", () => {
     it("should calculate premium-to-portfolio ratio", () => {
       const legs = [

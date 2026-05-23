@@ -1,12 +1,20 @@
+/**
+ * Tests de calendarSpreadEngine.ts — T196 (tests unitarios engines Calendar/Diagonal)
+ * Cobertura: theta decay, escenarios de precio, variantes call/put, IV curve.
+ * Modulo bajo prueba: CalendarSpreadEngine
+ */
 import { describe, it, expect } from "vitest";
 import { TermStrategyContract } from "../../../../src/modules/strategies/term/termStrategyContract";
 import { CalendarSpreadEngine } from "../../../../src/modules/strategies/term/calendarSpreadEngine";
+import { estimateForwardIv } from "../../../../src/modules/strategies/term/termUtils";
 
+/** Tests de CalendarSpreadEngine: constructor, analyze (theta, escenarios, call/put, IV curve), getContract */
 describe("CalendarSpreadEngine", () => {
   const now = new Date();
   const shortExpiration = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   const longExpiration = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
 
+  /** Helper: crea un contrato calendar valido con 2 legs del mismo strike, expiraciones 30/90d */
   function makeValidContract(optionStyle: "call" | "put" = "call"): TermStrategyContract {
     return new TermStrategyContract({
       legs: [
@@ -17,6 +25,7 @@ describe("CalendarSpreadEngine", () => {
     });
   }
 
+  /** Verifica que el constructor acepta contratos validos y parametros opcionales */
   describe("constructor", () => {
     it("should accept a valid contract", () => {
       const contract = makeValidContract();
@@ -34,6 +43,7 @@ describe("CalendarSpreadEngine", () => {
     });
   });
 
+  /** Tests del metodo analyze: DTE, thetas, escenarios, estructura, rango de precios, variantes call/put, IV curve */
   describe("analyze", () => {
     it("should return shortDte and longDte", () => {
       const contract = makeValidContract();
@@ -52,6 +62,14 @@ describe("CalendarSpreadEngine", () => {
       expect(typeof result.shortTheta).toBe("number");
       expect(typeof result.longTheta).toBe("number");
       expect(typeof result.netTheta).toBe("number");
+    });
+
+    it("should have positive netTheta for ATM calendar spread (long theta decay)", () => {
+      const contract = makeValidContract("call");
+      const engine = new CalendarSpreadEngine(contract);
+      const result = engine.analyze();
+
+      expect(result.netTheta).toBeGreaterThan(0);
     });
 
     it("should return scenarios array", () => {
@@ -130,6 +148,79 @@ describe("CalendarSpreadEngine", () => {
     });
   });
 
+  /** Tests de estimateForwardIv: calculo forward, casos borde (T iguales), high IV backwardation */
+  describe("estimateForwardIv", () => {
+    it("should return forward IV higher when back end is higher", () => {
+      const fwd = estimateForwardIv(0.20, 0.30, 30 / 365, 90 / 365);
+      expect(fwd).toBeGreaterThan(0.30);
+    });
+
+    it("should return forward IV lower when front end is higher (backwardation)", () => {
+      const fwd = estimateForwardIv(0.35, 0.20, 30 / 365, 90 / 365);
+      expect(fwd).toBeLessThan(0.35);
+    });
+
+    it("should return longIv when shortT >= longT", () => {
+      const fwd = estimateForwardIv(0.25, 0.30, 90 / 365, 30 / 365);
+      expect(fwd).toBe(0.30);
+    });
+
+    it("should return longIv when shortT <= 0", () => {
+      const fwd = estimateForwardIv(0.25, 0.30, 0, 90 / 365);
+      expect(fwd).toBe(0.30);
+    });
+
+    it("should return a reduced value when numerator is negative", () => {
+      const fwd = estimateForwardIv(0.50, 0.20, 60 / 365, 90 / 365);
+      expect(fwd).toBeLessThan(0.50);
+      expect(fwd).toBeGreaterThan(0);
+    });
+  });
+
+  /** Tests de stressTests: estructura, 5 escenarios, valores numericos */
+  describe("stressTests", () => {
+    it("should return 5 stress test scenarios", () => {
+      const contract = makeValidContract();
+      const engine = new CalendarSpreadEngine(contract);
+      const result = engine.analyze();
+      expect(result.stressTests).toHaveLength(5);
+    });
+
+    it("should have correct structure for each stress test", () => {
+      const contract = makeValidContract();
+      const engine = new CalendarSpreadEngine(contract);
+      const result = engine.analyze();
+      const test = result.stressTests[0];
+      expect(test).toHaveProperty("label");
+      expect(test).toHaveProperty("description");
+      expect(test).toHaveProperty("underlyingPrice");
+      expect(test).toHaveProperty("shortIv");
+      expect(test).toHaveProperty("longIv");
+      expect(test).toHaveProperty("strategyValue");
+      expect(test).toHaveProperty("pnl");
+      expect(test).toHaveProperty("theta");
+    });
+
+    it("should include Market Crash scenario", () => {
+      const contract = makeValidContract();
+      const engine = new CalendarSpreadEngine(contract);
+      const result = engine.analyze();
+      const crash = result.stressTests.find(s => s.label === "Market Crash");
+      expect(crash).toBeDefined();
+      expect(crash!.underlyingPrice).toBeLessThan(90);
+    });
+
+    it("should report different P&L across stress scenarios", () => {
+      const contract = makeValidContract();
+      const engine = new CalendarSpreadEngine(contract);
+      const result = engine.analyze();
+      const pnls = result.stressTests.map(s => s.pnl);
+      const uniquePnls = new Set(pnls);
+      expect(uniquePnls.size).toBeGreaterThan(1);
+    });
+  });
+
+  /** Verifica que getContract() retorna la referencia original */
   describe("getContract", () => {
     it("should return the underlying contract", () => {
       const contract = makeValidContract();

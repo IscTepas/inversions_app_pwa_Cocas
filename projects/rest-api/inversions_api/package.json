@@ -7,7 +7,7 @@
     "dev:token": "node scripts/generate-dev-token.js",
     "dev:token:sync": "node scripts/sync-dev-token-to-frontend.js",
     "build": "tsc -p tsconfig.json",
-    "lint": "tsc --noEmit",
+    "lint": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run"
   },
   "dependencies": {

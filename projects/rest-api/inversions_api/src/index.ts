@@ -21,6 +21,12 @@ import { instrumentsCatalogRouter } from "./routes/catalogs/instruments";
 import { brokerCapabilitiesRouter } from "./routes/brokers/capabilities";
 import { marketDataOhlcRouter } from "./routes/market-data/ohlc";
 import { indicatorsCatalogRouter } from "./routes/indicators/catalog";
+/**
+ * Importaciones de rutas TEAM-09 (T168)
+ * calendarSpreadRouter  -> POST /api/v1/strategies/term/calendar   (linea 63)
+ * diagonalSpreadRouter  -> POST /api/v1/strategies/term/diagonal   (linea 64)
+ * termComparatorRouter  -> POST /api/v1/strategies/term/compare    (linea 65)
+ */
 import { calendarSpreadRouter } from "./routes/strategies/term/calendarSpread";
 import { diagonalSpreadRouter } from "./routes/strategies/term/diagonalSpread";
 import { termComparatorRouter } from "./routes/strategies/term/termComparator";
@@ -60,6 +66,13 @@ app.use("/api/catalogs", instrumentsCatalogRouter);
 app.use("/api/brokers", brokerCapabilitiesRouter);
 app.use("/api/market-data", marketDataOhlcRouter);
 app.use("/api/indicators", indicatorsCatalogRouter);
+/**
+ * Rutas TEAM-09 — Estrategias temporales Calendar/Diagonal Spread
+ * Endpoints expuestos:
+ *   POST /api/v1/strategies/term/calendar  -> CalendarSpreadEngine + simulacion + reporte
+ *   POST /api/v1/strategies/term/diagonal   -> DiagonalSpreadEngine + simulacion + reporte
+ *   POST /api/v1/strategies/term/compare    -> Comparador Calendar vs Diagonal
+ */
 app.use("/api/v1/strategies/term", calendarSpreadRouter);
 app.use("/api/v1/strategies/term", diagonalSpreadRouter);
 app.use("/api/v1/strategies/term", termComparatorRouter);

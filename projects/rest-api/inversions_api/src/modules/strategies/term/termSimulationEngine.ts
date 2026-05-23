@@ -1,3 +1,12 @@
+/**
+ * termSimulationEngine.ts — T165
+ * Proposito: Motor de simulacion temporal con 3 modos: backtesting con datos historicos,
+ * Monte Carlo (normal/lognormal), y escenarios deterministicos (precio+IV+tiempo).
+ * Llamado por: routes/strategies/term/calendarSpread (POST /calendar),
+ *              routes/strategies/term/diagonalSpread (POST /diagonal)
+ * Dependencias: calendarSpreadEngine, diagonalSpreadEngine (motores de estrategia),
+ *               termStrategyContract, termUtils
+ */
 import { CalendarSpreadEngine, type CalendarSpreadResult, type IvCurvePoint } from "./calendarSpreadEngine";
 import { DiagonalSpreadEngine, type RiskProfile } from "./diagonalSpreadEngine";
 import { TermStrategyContract, type OptionStyle } from "./termStrategyContract";
@@ -58,6 +67,7 @@ export interface SimulationResult {
   timestamp: Date;
 }
 
+/** Genera numero aleatorio normal estandar usando Box-Muller. Usado por runMonteCarlo */
 function generateNormalRandom(): number {
   let u = 0, v = 0;
   while (u === 0) u = Math.random();
@@ -65,6 +75,7 @@ function generateNormalRandom(): number {
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
+/** Calcula Sharpe Ratio anualizado. Usado por runBacktest */
 function calculateSharpeRatio(returns: number[], riskFreeRate: number): number {
   if (returns.length < 2) return 0;
   const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
@@ -74,6 +85,7 @@ function calculateSharpeRatio(returns: number[], riskFreeRate: number): number {
   return (mean - riskFreeRate / 252) / stdDev;
 }
 
+/** Calcula Sortino Ratio (solo downside risk). Usado por runBacktest */
 function calculateSortinoRatio(returns: number[], riskFreeRate: number): number {
   if (returns.length < 2) return 0;
   const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
@@ -85,6 +97,7 @@ function calculateSortinoRatio(returns: number[], riskFreeRate: number): number 
   return (mean - riskFreeRate / 252) / downsideDev;
 }
 
+/** Calcula maximo drawdown desde un pico historico. Usado por runBacktest */
 function calculateMaxDrawdown(equityCurve: number[]): number {
   if (equityCurve.length < 2) return 0;
   let peak = equityCurve[0];
@@ -104,6 +117,7 @@ export class TermSimulationEngine {
   private readonly riskFreeRate: number;
   private readonly ivCurve: IvCurvePoint[];
 
+  /** Construye el motor con ambos engines (calendar/diagonal), contrato, tasa libre de riesgo y curva IV */
   constructor(
     contract: TermStrategyContract,
     calendarEngine: CalendarSpreadEngine | null,
@@ -118,6 +132,7 @@ export class TermSimulationEngine {
     this.ivCurve = ivCurve;
   }
 
+  /** Backtesting sobre datos historicos OHLC: calcula rendimiento, Sharpe, Sortino, max drawdown, win rate. Minimo 20 datos */
   runBacktest(historicalData: OhlcData[]): BacktestResult {
     if (historicalData.length < 20) {
       return {
@@ -158,6 +173,7 @@ export class TermSimulationEngine {
     };
   }
 
+  /** Simulacion Monte Carlo con config: iteraciones, distribucion (normal/lognormal). Retorna distribucion de P&L, percentiles y VaR 95% */
   runMonteCarlo(config: MonteCarloConfig): MonteCarloResult {
     const legs = this.contract.getLegs();
     const sortedByExpiration = [...legs].sort(
@@ -229,6 +245,7 @@ export class TermSimulationEngine {
     };
   }
 
+  /** Escenarios deterministicos: combina shocks de IV (-10%, 0, +10%), precio (-10%, 0, +10%) y pasos temporales (0, mitad, fin) */
   runDeterministic(): DeterministicScenario[] {
     const legs = this.contract.getLegs();
     const sortedByExpiration = [...legs].sort(
@@ -318,6 +335,7 @@ export class TermSimulationEngine {
     return scenarios;
   }
 
+  /** Ejecuta simulacion completa: backtest (opcional), Monte Carlo (opcional) y deterministico (siempre). Retorna SimulationResult. Llamado por las rutas REST */
   simulate(
     historicalData?: OhlcData[],
     monteCarloConfig?: MonteCarloConfig
@@ -340,10 +358,12 @@ export class TermSimulationEngine {
     };
   }
 
+  /** Retorna el engine de Calendar (o null si no se uso). Para acceso externo si es necesario */
   getCalendarEngine(): CalendarSpreadEngine | null {
     return this.calendarEngine;
   }
 
+  /** Retorna el engine de Diagonal (o null si no se uso) */
   getDiagonalEngine(): DiagonalSpreadEngine | null {
     return this.diagonalEngine;
   }

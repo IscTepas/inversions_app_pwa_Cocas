@@ -1,9 +1,19 @@
+/**
+ * calendarSpread.ts — T168 (endpoint REST)
+ * Proposito: Ruta POST /api/v1/strategies/term/calendar.
+ * Orquesta: TermStrategyContract (validacion) -> CalendarSpreadEngine (analisis)
+ *           -> TermSimulationEngine (Monte Carlo + deterministico)
+ *           -> TermReportEngine (reporte estructurado).
+ * Llamado por: src/index.ts (registra el router en /api/v1/strategies/term linea 63)
+ * Dependencias: termStrategyContract, calendarSpreadEngine, termSimulationEngine, termReportEngine
+ */
 import { Router } from "express";
 import { TermStrategyContract } from "../../../modules/strategies/term/termStrategyContract";
 import { CalendarSpreadEngine } from "../../../modules/strategies/term/calendarSpreadEngine";
 import { TermSimulationEngine } from "../../../modules/strategies/term/termSimulationEngine";
 import { TermReportEngine } from "../../../modules/strategies/term/termReportEngine";
 
+/** Request body para POST /calendar */
 export interface CalendarRequest {
   legs: Array<{
     strike: number;
@@ -70,6 +80,7 @@ export const calendarSpreadRouter = Router();
  *       500:
  *         description: Error interno del servidor
  */
+/** POST /calendar: valida contrato, analiza con CalendarSpreadEngine, simula, genera reporte estructurado. Llamado desde src/index.ts linea 63 */
 calendarSpreadRouter.post("/calendar", (req, res) => {
   try {
     const body = req.body as CalendarRequest;

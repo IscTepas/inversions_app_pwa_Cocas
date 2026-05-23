@@ -1,13 +1,21 @@
+/**
+ * Tests de termSimulationEngine.ts — T197 (tests unitarios simulacion y orquestador)
+ * Cobertura: backtesting, Monte Carlo (normal/lognormal), escenarios deterministicos,
+ * simulacion completa con/sin datos historicos y configuracion MC.
+ * Modulo bajo prueba: TermSimulationEngine
+ */
 import { describe, it, expect } from "vitest";
 import { TermStrategyContract } from "../../../../src/modules/strategies/term/termStrategyContract";
 import { TermSimulationEngine } from "../../../../src/modules/strategies/term/termSimulationEngine";
 import type { OhlcData } from "../../../../src/modules/strategies/term/termSimulationEngine";
 
+/** Tests de TermSimulationEngine: constructor, runBacktest, runMonteCarlo (normal), runDeterministic, simulate */
 describe("TermSimulationEngine", () => {
   const now = new Date();
   const shortExpiration = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   const longExpiration = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
 
+  /** Helper: crea contrato calendar para pruebas de simulacion */
   function makeValidContract(): TermStrategyContract {
     return new TermStrategyContract({
       legs: [
@@ -18,6 +26,7 @@ describe("TermSimulationEngine", () => {
     });
   }
 
+  /** Helper: genera datos OHLC simulados con precio random walk */
   function makeMockOhlcData(length: number): OhlcData[] {
     const data: OhlcData[] = [];
     let price = 100;
@@ -36,6 +45,7 @@ describe("TermSimulationEngine", () => {
     return data;
   }
 
+  /** Verifica que el constructor acepta contrato valido */
   describe("constructor", () => {
     it("should accept a valid contract", () => {
       const contract = makeValidContract();
@@ -44,6 +54,7 @@ describe("TermSimulationEngine", () => {
     });
   });
 
+  /** Tests de runBacktest: datos insuficientes, calculo de retornos, equity curve */
   describe("runBacktest", () => {
     it("should return empty result with insufficient data", () => {
       const contract = makeValidContract();
@@ -70,6 +81,7 @@ describe("TermSimulationEngine", () => {
     });
   });
 
+  /** Tests de runMonteCarlo: iteraciones, percentiles, mean/median */
   describe("runMonteCarlo", () => {
     it("should run specified number of iterations", () => {
       const contract = makeValidContract();
@@ -98,6 +110,7 @@ describe("TermSimulationEngine", () => {
     });
   });
 
+  /** Tests de runDeterministic: escenarios generados, price-IV combos, time steps, estructura */
   describe("runDeterministic", () => {
     it("should generate deterministic scenarios", () => {
       const contract = makeValidContract();
@@ -136,6 +149,7 @@ describe("TermSimulationEngine", () => {
     });
   });
 
+  /** Tests de simulate: resultado completo, backtest con datos, Monte Carlo con config */
   describe("simulate", () => {
     it("should return full simulation result", () => {
       const contract = makeValidContract();

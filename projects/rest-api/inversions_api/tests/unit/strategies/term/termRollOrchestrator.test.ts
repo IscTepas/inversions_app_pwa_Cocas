@@ -1,12 +1,20 @@
+/**
+ * Tests de termRollOrchestrator.ts — T197 (tests unitarios simulacion y orquestador)
+ * Cobertura: triggers de roll (theta residual, gamma, DTE, violacion riesgo),
+ * costos de roll, recomendacion de cierre anticipado, timing sugerido.
+ * Modulo bajo prueba: TermRollOrchestrator
+ */
 import { describe, it, expect } from "vitest";
 import { TermStrategyContract } from "../../../../src/modules/strategies/term/termStrategyContract";
 import { TermRollOrchestrator } from "../../../../src/modules/strategies/term/termRollOrchestrator";
 
+/** Tests de TermRollOrchestrator: constructor, evaluate (triggers theta/gamma/DTE/riesgo, costos, timing, no-roll) */
 describe("TermRollOrchestrator", () => {
   const now = new Date();
   const shortExpiration = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   const longExpiration = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
 
+  /** Helper: crea contrato calendar para pruebas de roll */
   function makeValidContract(): TermStrategyContract {
     return new TermStrategyContract({
       legs: [
@@ -17,6 +25,7 @@ describe("TermRollOrchestrator", () => {
     });
   }
 
+  /** Verifica que el constructor acepta contratos y parametros personalizados */
   describe("constructor", () => {
     it("should accept a valid contract", () => {
       const orch = new TermRollOrchestrator(makeValidContract(), null, -2);
@@ -33,6 +42,7 @@ describe("TermRollOrchestrator", () => {
     });
   });
 
+  /** Tests de evaluate: estructura, triggers theta/gamma/DTE/riesgo, costos, timing, no-roll */
   describe("evaluate", () => {
     it("should return roll recommendation", () => {
       const orch = new TermRollOrchestrator(makeValidContract(), null, -2);

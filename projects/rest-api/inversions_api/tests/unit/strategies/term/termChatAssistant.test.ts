@@ -1,3 +1,9 @@
+/**
+ * Tests de termChatAssistant.ts — T202 (cobertura >=80%)
+ * Cobertura: buildPurpose, buildRiskProfile, buildUsageConditions,
+ * buildScenarioSummary, extractMetrics, disclaimer RNF-001.
+ * Modulo bajo prueba: TermChatAssistant
+ */
 import { describe, it, expect } from "vitest";
 import { TermChatAssistant } from "../../../../src/modules/strategies/term/termChatAssistant";
 import type { CalendarSpreadResult } from "../../../../src/modules/strategies/term/calendarSpreadEngine";
@@ -11,10 +17,12 @@ const mockCalendarResult: CalendarSpreadResult = {
   shortTheta: -5,
   longTheta: -3,
   netTheta: -2,
+  greeks: { delta: 0, gamma: 0, theta: -2, vega: 0 },
   scenarios: [
     { underlyingPrice: 100, strategyValue: 3, pnl: 0, theta: -2, impliedVolatility: 0.2 },
     { underlyingPrice: 110, strategyValue: 2, pnl: -1, theta: -1.5, impliedVolatility: 0.25 },
   ],
+  stressTests: [],
 };
 
 const mockDiagonalResult: RiskProfile = {
@@ -26,9 +34,12 @@ const mockDiagonalResult: RiskProfile = {
   scenarios: [],
   thetaDecayProfile: [],
   vegaShockProfile: [],
+  stressTests: [],
 };
 
 const mockSimResult: SimulationResult = {
+  strategy: "calendar",
+  optionStyle: "call",
   deterministic: [
     { label: "Price-10%_IV-10%", price: 90, ivShock: -0.1, dteRemaining: 30, strategyValue: 0.5, pnl: -2.5 },
     { label: "Price+0%_IV+0%", price: 100, ivShock: 0, dteRemaining: 30, strategyValue: 3, pnl: 0 },
@@ -44,17 +55,23 @@ const mockSimResult: SimulationResult = {
     var95: -2.1,
     pnlDistribution: [],
   },
+  backtest: null,
+  timestamp: new Date("2025-01-01"),
 };
 
 const mockRiskAnalysis: RiskAnalysis = {
   limitsViolation: true,
   violations: ["Theta limit exceeded", "Concentration limit breached"],
-  earlyAssignmentRisk: { isAtRisk: true, probability: 0.35, detail: "Short leg is deep ITM" },
-  stopLossTriggered: false,
+  earlyAssignmentRisk: { isAtRisk: true, probability: 0.35, reason: "Short leg is deep ITM", leg: { strike: 100, expiration: new Date("2025-02-01"), premium: 3, contracts: 1, optionStyle: "call" } },
+  stopLossRules: [],
   alerts: [],
+  portfolioExposure: 0.3,
+  thetaExposure: -2,
 };
 
+/** Tests de TermChatAssistant: constructor, getContext, explain, buildPurpose, buildRiskProfile, buildUsageConditions, buildScenarioSummary, extractMetrics, structuredOutput, disclaimer RNF-001 */
 describe("TermChatAssistant", () => {
+  /** Verifica que el constructor acepta cualquier combinacion de resultados */
   describe("constructor", () => {
     it("should accept calendar result", () => {
       const chat = new TermChatAssistant(mockCalendarResult, null, null, null);
@@ -77,6 +94,7 @@ describe("TermChatAssistant", () => {
     });
   });
 
+  /** Tests de getContext: calendar, diagonal, preferencia calendar sobre diagonal, null sin datos */
   describe("getContext", () => {
     it("should return context from calendar result", () => {
       const chat = new TermChatAssistant(mockCalendarResult, null, null, null);
@@ -108,6 +126,7 @@ describe("TermChatAssistant", () => {
     });
   });
 
+  /** Tests de explain: purpose, risk profile, usage conditions, disclaimer, structured output */
   describe("explain", () => {
     it("should generate explanation with purpose", () => {
       const chat = new TermChatAssistant(mockCalendarResult, null, null, null);
@@ -153,6 +172,7 @@ describe("TermChatAssistant", () => {
     });
   });
 
+  /** Tests de buildPurpose: calendar, diagonal, sin datos */
   describe("buildPurpose", () => {
     it("should describe calendar spread purpose", () => {
       const chat = new TermChatAssistant(mockCalendarResult, null, null, null);
@@ -175,6 +195,7 @@ describe("TermChatAssistant", () => {
     });
   });
 
+  /** Tests de buildRiskProfile: theta, delta, risk analysis, early assignment, sin datos */
   describe("buildRiskProfile", () => {
     it("should describe theta in risk profile for calendar", () => {
       const chat = new TermChatAssistant(mockCalendarResult, null, null, null);
@@ -210,6 +231,7 @@ describe("TermChatAssistant", () => {
     });
   });
 
+  /** Tests de buildUsageConditions: calendar, diagonal, condiciones comunes, sin datos */
   describe("buildUsageConditions", () => {
     it("should include calendar-specific conditions", () => {
       const chat = new TermChatAssistant(mockCalendarResult, null, null, null);
@@ -239,6 +261,7 @@ describe("TermChatAssistant", () => {
     });
   });
 
+  /** Tests de buildScenarioSummary: deterministic, Monte Carlo, sin datos, sin Price label, solo MC */
   describe("buildScenarioSummary", () => {
     it("should return deterministic scenario summary", () => {
       const chat = new TermChatAssistant(mockCalendarResult, null, mockSimResult, null);
@@ -260,7 +283,7 @@ describe("TermChatAssistant", () => {
     });
 
     it("should handle empty deterministic scenarios", () => {
-      const emptySim: SimulationResult = { deterministic: [], monteCarlo: null };
+      const emptySim: SimulationResult = { strategy: "calendar", optionStyle: "call", deterministic: [], monteCarlo: null, backtest: null, timestamp: new Date("2025-01-01") };
       const chat = new TermChatAssistant(mockCalendarResult, null, emptySim, null);
       const exp = chat.explain();
       expect(exp.scenarioSummary).toBe("No simulation data available.");
@@ -268,10 +291,14 @@ describe("TermChatAssistant", () => {
 
     it("should handle deterministic scenarios without Price label", () => {
       const noPriceSim: SimulationResult = {
+        strategy: "calendar",
+        optionStyle: "call",
         deterministic: [
           { label: "TimeStep_15d", price: 100, ivShock: 0, dteRemaining: 15, strategyValue: 3, pnl: 0 },
         ],
         monteCarlo: null,
+        backtest: null,
+        timestamp: new Date("2025-01-01"),
       };
       const chat = new TermChatAssistant(mockCalendarResult, null, noPriceSim, null);
       const exp = chat.explain();
@@ -280,14 +307,18 @@ describe("TermChatAssistant", () => {
 
     it("should return summary with Monte Carlo only (no deterministic with Price)", () => {
       const mcOnlySim: SimulationResult = {
+        strategy: "calendar",
+        optionStyle: "call",
         deterministic: [
           { label: "TimeStep_15d", price: 100, ivShock: 0, dteRemaining: 15, strategyValue: 3, pnl: 0 },
         ],
         monteCarlo: {
           iterations: 500, distribution: "lognormal",
           meanPnl: 1.2, medianPnl: 0.8, percentile5: -1.5, percentile95: 3.8, var95: -1.5,
-          percentiles: { p5: -1.5, p95: 3.8 }, pnlDistribution: [],
+          pnlDistribution: [],
         },
+        backtest: null,
+        timestamp: new Date("2025-01-01"),
       };
       const chat = new TermChatAssistant(mockCalendarResult, null, mcOnlySim, null);
       const exp = chat.explain();
@@ -296,6 +327,7 @@ describe("TermChatAssistant", () => {
     });
   });
 
+  /** Tests de extractMetrics: calendar, diagonal, Monte Carlo, N/A, empty context, rounding */
   describe("extractMetrics", () => {
     it("should extract metrics for calendar strategy", () => {
       const chat = new TermChatAssistant(mockCalendarResult, null, null, null);
@@ -343,6 +375,7 @@ describe("TermChatAssistant", () => {
     });
   });
 
+  /** Tests del structuredOutput: purpose, conditions array, risks array */
   describe("structuredOutput", () => {
     it("should have purpose in structured output", () => {
       const chat = new TermChatAssistant(mockCalendarResult, null, null, null);

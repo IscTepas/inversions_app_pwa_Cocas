@@ -295,6 +295,8 @@ async function testCalendar() {
           <tbody>${(d.scenarios || []).map(s => `<tr><td>$${fmt(s.underlyingPrice,1)}</td><td>$${fmt(s.strategyValue)}</td><td class="${cls(s.pnl)}">$${fmt(s.pnl)}</td><td class="${cls(s.theta)}">${fmt(s.theta)}</td></tr>`).join('')}</tbody></table>
         </div>
       </div>
+      ${d.report?.stressTests ? buildStressTests(d.report.stressTests) : ''}
+      ${d.report?.probabilityCone ? buildProbabilityCone(d.report.probabilityCone) : ''}
       ${d.simulation?.monteCarlo ? buildMonteCarloSection(d.simulation.monteCarlo) : ''}
       <p style="color:var(--muted);font-size:0.75rem">generatedAt: ${d.report?.generatedAt ?? '—'}</p>
     `;
@@ -348,6 +350,8 @@ async function testDiagonal() {
           <tbody>${(d.scenarios || []).map(s => `<tr><td>$${fmt(s.underlyingPrice,1)}</td><td>$${fmt(s.strategyValue)}</td><td class="${cls(s.pnl)}">$${fmt(s.pnl)}</td><td class="${cls(s.greeks?.delta)}">${fmt(s.greeks?.delta)}</td><td class="${cls(s.greeks?.theta)}">${fmt(s.greeks?.theta)}</td><td class="${cls(s.greeks?.vega)}">${fmt(s.greeks?.vega)}</td></tr>`).join('')}</tbody></table>
         </div>
       </div>
+      ${d.report?.stressTests ? buildStressTests(d.report.stressTests) : ''}
+      ${d.report?.probabilityCone ? buildProbabilityCone(d.report.probabilityCone) : ''}
       ${d.simulation?.monteCarlo ? buildMonteCarloSection(d.simulation.monteCarlo) : ''}
       <p style="color:var(--muted);font-size:0.75rem">generatedAt: ${d.report?.generatedAt ?? '—'}</p>
     `;
@@ -379,44 +383,66 @@ async function testCompare() {
   try {
     const d = await post(`${API_BASE}/compare`, buildCompareBody());
     const isCal = d.recommendation === 'calendar';
+    const cal = d.calendar || {};
+    const diag = d.diagonal || {};
     el.innerHTML = `
       <div class="card">
         <div class="rec-box ${isCal ? 'rec-calendar' : 'rec-diagonal'}">
-          ${isCal ? '📅' : '📐'} Recomendación: ${d.recommendation.toUpperCase()}
+          ${isCal ? '📅' : '📐'} Recomendación: ${d.recommendation.toUpperCase()} <span style="font-size:0.8rem;opacity:.8">(score: ${fmt(d.scores?.calendar)} vs ${fmt(d.scores?.diagonal)})</span>
         </div>
         <p class="just">${d.justification}</p>
       </div>
       <div class="card">
-        <h3>Métricas Comparativas</h3>
-        <div class="metric-grid">
-          <div class="metric" style="border:1px solid ${isCal ? 'var(--green)' : 'var(--border)'}">
-            <div class="val" style="color:${isCal ? 'var(--green)' : 'var(--text)'}">${fmt(d.calendarMetrics?.netTheta)}</div>
-            <div class="lbl">θ Calendar</div>
-          </div>
-          <div class="metric" style="border:1px solid ${!isCal ? 'var(--accent)' : 'var(--border)'}">
-            <div class="val" style="color:${!isCal ? 'var(--accent)' : 'var(--text)'}">${fmt(d.diagonalMetrics?.netTheta)}</div>
-            <div class="lbl">θ Diagonal</div>
-          </div>
-          <div class="metric"><div class="val">${fmt(d.calendarMetrics?.shortDte,0)}</div><div class="lbl">DTE Calendar</div></div>
-          <div class="metric"><div class="val">${fmt(d.diagonalMetrics?.shortDte,0)}</div><div class="lbl">DTE Diagonal</div></div>
-          <div class="metric"><div class="val ${cls(d.diagonalMetrics?.netDelta)}">${fmt(d.diagonalMetrics?.netDelta)}</div><div class="lbl">Δ Diagonal</div></div>
-        </div>
+        <h3>💰 Capital &amp; Riesgo</h3>
+        <table>
+          <thead><tr><th>Métrica</th><th style="color:${isCal ? 'var(--green)' : 'var(--text)'}">📅 Calendar</th><th style="color:${!isCal ? 'var(--accent)' : 'var(--text)'}">📐 Diagonal</th></tr></thead>
+          <tbody>
+            <tr><td>Costo Neto (débito)</td><td class="${cls(cal.cost)}">$${fmt(cal.cost)}</td><td class="${cls(diag.cost)}">$${fmt(diag.cost)}</td></tr>
+            <tr><td>Pérdida Máxima</td><td class="${cls(cal.maxLoss)}">$${fmt(cal.maxLoss)}</td><td class="${cls(diag.maxLoss)}">$${fmt(diag.maxLoss)}</td></tr>
+            <tr><td>Ganancia Máxima</td><td class="${cls(cal.maxProfit)}">$${fmt(cal.maxProfit)}</td><td class="${cls(diag.maxProfit)}">$${fmt(diag.maxProfit)}</td></tr>
+            <tr><td>Break-Evens</td><td>${(cal.breakEvens||[]).map(b => '$'+fmt(b)).join(', ') || '—'}</td><td>${(diag.breakEvens||[]).map(b => '$'+fmt(b)).join(', ') || '—'}</td></tr>
+            <tr><td>Prob. de Ganancia</td><td>${fmt(cal.probabilityOfProfit!=null ? cal.probabilityOfProfit*100 : null,1)}%</td><td>${fmt(diag.probabilityOfProfit!=null ? diag.probabilityOfProfit*100 : null,1)}%</td></tr>
+            <tr><td>Perfil Direccional</td><td>${cal.directionalProfile || 'neutral'}</td><td>${diag.directionalProfile || 'neutral'}</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3>📊 Exposición Griegas</h3>
+        <table>
+          <thead><tr><th>Griega</th><th style="color:${isCal ? 'var(--green)' : 'var(--text)'}">📅 Calendar</th><th style="color:${!isCal ? 'var(--accent)' : 'var(--text)'}">📐 Diagonal</th></tr></thead>
+          <tbody>
+            <tr><td>Delta (Δ)</td><td class="${cls(cal.greeks?.delta)}">${fmt(cal.greeks?.delta)}</td><td class="${cls(diag.greeks?.delta)}">${fmt(diag.greeks?.delta)}</td></tr>
+            <tr><td>Gamma (Γ)</td><td class="${cls(cal.greeks?.gamma)}">${fmt(cal.greeks?.gamma)}</td><td class="${cls(diag.greeks?.gamma)}">${fmt(diag.greeks?.gamma)}</td></tr>
+            <tr><td>Theta (θ)</td><td class="${cls(cal.greeks?.theta)}">${fmt(cal.greeks?.theta)}</td><td class="${cls(diag.greeks?.theta)}">${fmt(diag.greeks?.theta)}</td></tr>
+            <tr><td>Vega (ν)</td><td class="${cls(cal.greeks?.vega)}">${fmt(cal.greeks?.vega)}</td><td class="${cls(diag.greeks?.vega)}">${fmt(diag.greeks?.vega)}</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3>⏳ DTE (Días hasta Vencimiento)</h3>
+        <table>
+          <thead><tr><th>Pata</th><th style="color:${isCal ? 'var(--green)' : 'var(--text)'}">📅 Calendar</th><th style="color:${!isCal ? 'var(--accent)' : 'var(--text)'}">📐 Diagonal</th></tr></thead>
+          <tbody>
+            <tr><td>Corta</td><td>${fmt(cal.dte?.short,0)}d</td><td>${fmt(diag.dte?.short,0)}d</td></tr>
+            <tr><td>Larga</td><td>${fmt(cal.dte?.long,0)}d</td><td>${fmt(diag.dte?.long,0)}d</td></tr>
+          </tbody>
+        </table>
       </div>
     `;
   } catch (e) { showError(el, e.message); }
 }
 
 function buildMonteCarloSection(mc) {
-  if (!mc || !mc.percentiles) return '';
+  if (!mc) return '';
   return `<div class="card">
     <h3>Simulacion Monte Carlo (${mc.iterations ?? '?'} iteraciones)</h3>
     <div class="metric-grid">
       <div class="metric"><div class="val ${cls(mc.meanPnl)}">${fmt(mc.meanPnl)}</div><div class="lbl">P&L Medio</div></div>
       <div class="metric"><div class="val ${cls(mc.medianPnl)}">${fmt(mc.medianPnl)}</div><div class="lbl">P&L Mediana</div></div>
-      <div class="metric"><div class="val ${cls(mc.percentiles?.p5)}">${fmt(mc.percentiles?.p5)}</div><div class="lbl">P&L P5</div></div>
-      <div class="metric"><div class="val ${cls(mc.percentiles?.p95)}">${fmt(mc.percentiles?.p95)}</div><div class="lbl">P&L P95</div></div>
+      <div class="metric"><div class="val ${cls(mc.percentile5)}">${fmt(mc.percentile5)}</div><div class="lbl">P&L P5</div></div>
+      <div class="metric"><div class="val ${cls(mc.percentile95)}">${fmt(mc.percentile95)}</div><div class="lbl">P&L P95</div></div>
       <div class="metric"><div class="val ${cls(mc.var95)}">${fmt(mc.var95)}</div><div class="lbl">VaR 95%</div></div>
-      <div class="metric"><div class="val">${fmt(mc.distribution?.length ?? 0, 0)}</div><div class="lbl">Trayectorias</div></div>
+      <div class="metric"><div class="val">${mc.pnlDistribution?.length ?? 0}</div><div class="lbl">Trayectorias</div></div>
     </div>
   </div>`;
 }
@@ -445,6 +471,9 @@ function buildRiskMetrics(m) {
       <div class="metric"><div class="val ${cls(m.netVega)}">${fmt(m.netVega)}</div><div class="lbl">V</div></div>
       <div class="metric"><div class="val">${fmt(m.probabilityOfProfit*100,1)}%</div><div class="lbl">POP</div></div>
       <div class="metric"><div class="val">${fmt(m.sharpeRatio)}</div><div class="lbl">Sharpe</div></div>
+      <div class="metric"><div class="val ${cls(m.stressTestMaxLoss)}">${fmt(m.stressTestMaxLoss)}</div><div class="lbl">Stress Máx Pérdida</div></div>
+      <div class="metric"><div class="val ${cls(m.stressTestMaxGain)}">${fmt(m.stressTestMaxGain)}</div><div class="lbl">Stress Máx Ganancia</div></div>
+      <div class="metric"><div class="val ${cls(m.expectedShortfall)}">${fmt(m.expectedShortfall)}</div><div class="lbl">Expected Shortfall</div></div>
     </div>
   </div>`;
 }
@@ -458,6 +487,32 @@ function buildSurfaceInfo(s) {
       <div class="field"><label>Rango DTE</label><span style="color:var(--text)">${fmt(s.dteAxis?.[0],0)}d → ${fmt(s.dteAxis?.[s.dteAxis.length-1],0)}d</span></div>
       <div class="field"><label>Filas (DTE)</label><span style="color:var(--text)">${s.pnlMatrix?.length ?? 0}</span></div>
       <div class="field"><label>Columnas (Precio)</label><span style="color:var(--text)">${s.pnlMatrix?.[0]?.length ?? 0}</span></div>
+    </div>
+  </div>`;
+}
+
+function buildStressTests(stressTests) {
+  if (!stressTests || stressTests.length === 0) return '';
+  return `<div class="card">
+    <h3>Stress Tests (${stressTests.length} escenarios)</h3>
+    <div class="scroll">
+      <table><thead><tr><th>Escenario</th><th>Descripción</th><th>Precio</th><th>Valor Estrat.</th><th>P&amp;L</th></tr></thead>
+      <tbody>${stressTests.map(s => `<tr><td><strong>${s.label}</strong></td><td style="color:var(--muted);font-size:0.75rem">${s.description}</td><td>$${fmt(s.underlyingPrice,1)}</td><td>$${fmt(s.strategyValue)}</td><td class="${cls(s.pnl)}">$${fmt(s.pnl)}</td></tr>`).join('')}</tbody></table>
+    </div>
+  </div>`;
+}
+
+function buildProbabilityCone(cone) {
+  if (!cone || cone.length === 0) return '';
+  const c = cone[0];
+  return `<div class="card">
+    <h3>Probability Cone (DTE ${c.dte}d)</h3>
+    <div class="metric-grid">
+      <div class="metric"><div class="val ${cls(c.percentile5)}">${fmt(c.percentile5)}</div><div class="lbl">P5</div></div>
+      <div class="metric"><div class="val ${cls(c.percentile25)}">${fmt(c.percentile25)}</div><div class="lbl">P25</div></div>
+      <div class="metric"><div class="val ${cls(c.median)}">${fmt(c.median)}</div><div class="lbl">Mediana</div></div>
+      <div class="metric"><div class="val ${cls(c.percentile75)}">${fmt(c.percentile75)}</div><div class="lbl">P75</div></div>
+      <div class="metric"><div class="val ${cls(c.percentile95)}">${fmt(c.percentile95)}</div><div class="lbl">P95</div></div>
     </div>
   </div>`;
 }

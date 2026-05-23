@@ -1,13 +1,22 @@
+/**
+ * Tests de integracion de rutas term — T198
+ * Cobertura: flujo completo Calendar POST /calendar, Diagonal POST /diagonal,
+ * Comparator POST /compare, validacion de errores en los 3 endpoints.
+ * Modulos bajo prueba: calendarSpread.ts, diagonalSpread.ts, termComparator.ts
+ * (logica de rutas sin HTTP — prueba directa de modulos)
+ */
 import { describe, it, expect } from "vitest";
 import { TermStrategyContract } from "../../../../src/modules/strategies/term/termStrategyContract";
 import { CalendarSpreadEngine } from "../../../../src/modules/strategies/term/calendarSpreadEngine";
 import { DiagonalSpreadEngine } from "../../../../src/modules/strategies/term/diagonalSpreadEngine";
 
+/** Tests de integracion: flujos completos de calendar, diagonal y comparator sin HTTP */
 describe("Term API Integration", () => {
   const now = new Date();
   const shortExp = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   const longExp = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
 
+  /** Tests de logica de ruta calendar: validacion, analisis completo, manejo errores */
   describe("Calendar Spread Route Logic", () => {
     it("should reject input with fewer than 2 legs", () => {
       const contract = new TermStrategyContract({
@@ -52,6 +61,7 @@ describe("Term API Integration", () => {
     });
   });
 
+  /** Tests de logica de ruta diagonal: validacion, analisis completo, rechazo calendar en /diagonal */
   describe("Diagonal Spread Route Logic", () => {
     it("should validate and analyze a complete diagonal spread", () => {
       const contract = new TermStrategyContract({
@@ -85,6 +95,7 @@ describe("Term API Integration", () => {
     });
   });
 
+  /** Tests de logica de ruta comparator: condiciones neutrales y entradas invalidas */
   describe("Comparator Route Logic", () => {
     it("should recommend calendar spread for neutral conditions", () => {
       const calContract = new TermStrategyContract({
