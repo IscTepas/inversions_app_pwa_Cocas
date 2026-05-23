@@ -1,7 +1,22 @@
+/**
+ * termStrategyContract.ts — T162 (modulo fundacional)
+ * Proposito: Define los tipos base (TermLeg, TermStrategyInput) y la validacion
+ * de consistencia temporal y estilo de opcion para Calendar/Diagonal Spreads.
+ * Llamado por: calendarSpreadEngine, diagonalSpreadEngine, termSimulationEngine,
+ *              termRiskEngine, termRollOrchestrator,
+ *              routes/strategies/term/calendarSpread (POST /calendar),
+ *              routes/strategies/term/diagonalSpread (POST /diagonal),
+ *              routes/strategies/term/termComparator (POST /compare),
+ *              tests unitarios y de integracion
+ * Dependencias: Ninguna (modulo raiz del arbol de dependencias)
+ */
+/** 'call' | 'put' — tipo de opcion */
 export type OptionStyle = 'call' | 'put';
 
+/** 'calendar' | 'diagonal' — tipo de estrategia temporal */
 export type StrategyType = 'calendar' | 'diagonal';
 
+/** Una pata individual de la estrategia: strike, fecha de expiracion, prima, contratos, estilo */
 export interface TermLeg {
   strike: number;
   expiration: Date;
@@ -10,16 +25,19 @@ export interface TermLeg {
   optionStyle: OptionStyle;
 }
 
+/** Input del contrato: array de legs + subyacente opcional */
 export interface TermStrategyInput {
   legs: TermLeg[];
   underlying?: string;
 }
 
+/** Resultado de validacion: valido/invalido + lista de errores */
 export interface ValidationResult {
   isValid: boolean;
   errors: TermStrategyError[];
 }
 
+/** Error de dominio con codigo, mensaje y campo afectado. Metodos estaticos para cada tipo de error */
 export class TermStrategyError {
   constructor(
     public readonly code: string,
@@ -27,27 +45,43 @@ export class TermStrategyError {
     public readonly field?: string
   ) {}
 
+  /** Crea error: la expiracion corta debe ser anterior a la larga, o diferencia < 7 dias */
   static temporalInconsistency(field: string, detail: string): TermStrategyError {
     return new TermStrategyError('TEMPORAL_INCONSISTENCY', detail, field);
   }
 
+  /** Crea error: optionStyle no es 'call' ni 'put' */
   static invalidOptionStyle(value: string): TermStrategyError {
     return new TermStrategyError('INVALID_OPTION_STYLE', `Invalid option style: '${value}'. Must be 'call' or 'put'.`, 'optionStyle');
   }
 
+  /** Crea error: menos de 2 legs */
   static insufficientLegs(count: number): TermStrategyError {
     return new TermStrategyError('INSUFFICIENT_LEGS', `Expected at least 2 legs, got ${count}.`, 'legs');
   }
 
+  /** Crea error: subyacentes diferentes entre legs */
   static inconsistentUnderlying(): TermStrategyError {
     return new TermStrategyError('INCONSISTENT_UNDERLYING', 'All legs must share the same underlying asset.', 'underlying');
   }
 
+  /** Crea error: configuracion invalida generica (strikes, primas, contratos, etc.) */
   static invalidConfiguration(detail: string): TermStrategyError {
     return new TermStrategyError('INVALID_CONFIGURATION', detail);
   }
+
+  /** Crea error: fecha invalida (Invalid Date) */
+  static invalidDateFormat(field: string, detail: string): TermStrategyError {
+    return new TermStrategyError('INVALID_DATE_FORMAT', detail, field);
+  }
+
+  /** Crea error: fecha de expiracion en pasado */
+  static expirationInPast(field: string, detail: string): TermStrategyError {
+    return new TermStrategyError('EXPIRATION_IN_PAST', detail, field);
+  }
 }
 
+/** Contrato base que recibe input, valida y clasifica Calendar vs Diagonal. Instanciado por routes y engines */
 export class TermStrategyContract {
   private readonly input: TermStrategyInput;
 
@@ -55,6 +89,7 @@ export class TermStrategyContract {
     this.input = input;
   }
 
+  /** Valida el contrato completo: legs, consistencia temporal y estilo de opcion. Retorna ValidationResult */
   validate(): ValidationResult {
     const errors: TermStrategyError[] = [];
 
@@ -74,6 +109,7 @@ export class TermStrategyContract {
     return { isValid: errors.length === 0, errors };
   }
 
+  /** Valida cada leg individual: strike positivo, prima no negativa, contratos > 0, optionStyle valido, fecha valida y no pasada. Ademas verifica mismo estilo entre legs */
   private validateLegs(): TermStrategyError[] {
     const errors: TermStrategyError[] = [];
 
@@ -96,6 +132,15 @@ export class TermStrategyContract {
       if (leg.optionStyle !== 'call' && leg.optionStyle !== 'put') {
         errors.push(TermStrategyError.invalidOptionStyle(String(leg.optionStyle)));
       }
+      const expTime = leg.expiration.getTime();
+      if (isNaN(expTime)) {
+        errors.push(TermStrategyError.invalidDateFormat(`Leg ${i}.expiration`, `Leg ${i}: expiration date is invalid.`));
+      } else {
+        const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+        if (expTime < oneDayAgo) {
+          errors.push(TermStrategyError.expirationInPast(`Leg ${i}.expiration`, `Leg ${i}: expiration date is in the past.`));
+        }
+      }
     }
 
     const callOrPut = this.input.legs[0].optionStyle;
@@ -107,6 +152,7 @@ export class TermStrategyContract {
     return errors;
   }
 
+  /** Valida que expiracion corta < expiracion larga y diferencia >= 7 dias */
   private validateTemporalConsistency(): TermStrategyError[] {
     const errors: TermStrategyError[] = [];
     const minExpirationDiffDays = 7;
@@ -141,6 +187,7 @@ export class TermStrategyContract {
     return errors;
   }
 
+  /** Clasifica Calendar (mismo strike) vs Diagonal (strikes diferentes). Rechaza misma expiracion+strike (no es spread) o mismo strike+misma expiracion (vertical spread) */
   private validateOptionStyleConsistency(): TermStrategyError[] {
     const errors: TermStrategyError[] = [];
 
@@ -179,6 +226,7 @@ export class TermStrategyContract {
     return errors;
   }
 
+  /** Retorna 'calendar' si todos los strikes son iguales, 'diagonal' si son diferentes. Usado por routes para validar el endpoint correcto */
   getType(): StrategyType {
     const strikes = this.input.legs.map(l => l.strike);
     const uniqueStrikes = new Set(strikes);
@@ -189,10 +237,12 @@ export class TermStrategyContract {
     return 'diagonal';
   }
 
+  /** Retorna copia defensiva de los legs. Usado por engines para leer los datos del contrato */
   getLegs(): TermLeg[] {
     return [...this.input.legs];
   }
 
+  /** Retorna copia defensiva del input completo. Mantiene inmutabilidad del contrato original */
   getInput(): TermStrategyInput {
     return { ...this.input, legs: [...this.input.legs] };
   }

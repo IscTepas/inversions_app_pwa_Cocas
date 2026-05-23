@@ -1,12 +1,20 @@
+/**
+ * Tests de diagonalSpreadEngine.ts — T196 (tests unitarios engines Calendar/Diagonal)
+ * Cobertura: griegas (delta/gamma/theta/vega), perfiles de riesgo, ventanas de ajuste,
+ * theta decay, vega shock, variantes call/put.
+ * Modulo bajo prueba: DiagonalSpreadEngine
+ */
 import { describe, it, expect } from "vitest";
 import { TermStrategyContract } from "../../../../src/modules/strategies/term/termStrategyContract";
 import { DiagonalSpreadEngine } from "../../../../src/modules/strategies/term/diagonalSpreadEngine";
 
+/** Tests de DiagonalSpreadEngine: constructor, analyze (DTE, griegas, perfil, escenarios, theta decay, vega shock, call/put), adjustment window, getContract */
 describe("DiagonalSpreadEngine", () => {
   const now = new Date();
   const shortExpiration = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   const longExpiration = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
 
+  /** Helper: crea un contrato diagonal valido con strikes 100/105, expiraciones 30/90d */
   function makeValidContract(optionStyle: "call" | "put" = "call"): TermStrategyContract {
     return new TermStrategyContract({
       legs: [
@@ -17,6 +25,7 @@ describe("DiagonalSpreadEngine", () => {
     });
   }
 
+  /** Verifica que el constructor acepta contratos validos y parametros personalizados */
   describe("constructor", () => {
     it("should accept a valid diagonal spread contract", () => {
       const contract = makeValidContract();
@@ -31,6 +40,7 @@ describe("DiagonalSpreadEngine", () => {
     });
   });
 
+  /** Tests del metodo analyze: DTE, griegas, perfil direccional, escenarios, theta decay, vega shock, call/put */
   describe("analyze", () => {
     it("should return DTE values", () => {
       const contract = makeValidContract();
@@ -50,6 +60,14 @@ describe("DiagonalSpreadEngine", () => {
       expect(typeof result.greeks.gamma).toBe("number");
       expect(typeof result.greeks.theta).toBe("number");
       expect(typeof result.greeks.vega).toBe("number");
+    });
+
+    it("should have positive netTheta for diagonal spread (collecting time decay)", () => {
+      const contract = makeValidContract("call");
+      const engine = new DiagonalSpreadEngine(contract);
+      const result = engine.analyze();
+
+      expect(result.greeks.theta).toBeGreaterThan(0);
     });
 
     it("should identify directional profile", () => {
@@ -105,6 +123,7 @@ describe("DiagonalSpreadEngine", () => {
     });
   });
 
+  /** Tests de la ventana de ajuste: null cuando no necesario, deteccion cuando DTE corto */
   describe("adjustment window", () => {
     it("should return null when no adjustment needed", () => {
       const contract = makeValidContract();
@@ -137,6 +156,55 @@ describe("DiagonalSpreadEngine", () => {
     });
   });
 
+  /** Tests de stressTests: estructura, 5 escenarios, griegas en cada uno */
+  describe("stressTests", () => {
+    it("should return 5 stress test scenarios", () => {
+      const contract = makeValidContract();
+      const engine = new DiagonalSpreadEngine(contract);
+      const result = engine.analyze();
+      expect(result.stressTests).toHaveLength(5);
+    });
+
+    it("should have correct structure for each stress test", () => {
+      const contract = makeValidContract();
+      const engine = new DiagonalSpreadEngine(contract);
+      const result = engine.analyze();
+      const test = result.stressTests[0];
+      expect(test).toHaveProperty("label");
+      expect(test).toHaveProperty("description");
+      expect(test).toHaveProperty("underlyingPrice");
+      expect(test).toHaveProperty("shortIv");
+      expect(test).toHaveProperty("longIv");
+      expect(test).toHaveProperty("strategyValue");
+      expect(test).toHaveProperty("pnl");
+      expect(test).toHaveProperty("greeks");
+      expect(test.greeks).toHaveProperty("delta");
+      expect(test.greeks).toHaveProperty("gamma");
+      expect(test.greeks).toHaveProperty("theta");
+      expect(test.greeks).toHaveProperty("vega");
+    });
+
+    it("should include IV Expansion scenario", () => {
+      const contract = makeValidContract();
+      const engine = new DiagonalSpreadEngine(contract);
+      const result = engine.analyze();
+      const ivExp = result.stressTests.find(s => s.label === "IV Expansion");
+      expect(ivExp).toBeDefined();
+      expect(ivExp!.shortIv).toBeGreaterThanOrEqual(0.3);
+      expect(ivExp!.longIv).toBeGreaterThanOrEqual(0.3);
+    });
+
+    it("should report different P&L and greeks across stress scenarios", () => {
+      const contract = makeValidContract();
+      const engine = new DiagonalSpreadEngine(contract);
+      const result = engine.analyze();
+      const pnls = result.stressTests.map(s => s.pnl);
+      const uniquePnls = new Set(pnls);
+      expect(uniquePnls.size).toBeGreaterThan(1);
+    });
+  });
+
+  /** Verifica que getContract() retorna la referencia original */
   describe("getContract", () => {
     it("should return the underlying contract", () => {
       const contract = makeValidContract();

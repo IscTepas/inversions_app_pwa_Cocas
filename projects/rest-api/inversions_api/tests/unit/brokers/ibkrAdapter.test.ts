@@ -5,7 +5,7 @@ describe("IBKR adapter", () => {
   it("retries once and returns normalized filled response", async () => {
     const adapter = new IBKRAdapter("key", "acct-1");
     const submitSpy = vi
-      .spyOn(adapter as unknown as { submitOrderWithTimeout: Function }, "submitOrderWithTimeout")
+      .spyOn(adapter as any, "submitOrderWithTimeout")
       .mockRejectedValueOnce(new Error("TIMEOUT"))
       .mockResolvedValueOnce({
         orderId: 99,
@@ -13,9 +13,9 @@ describe("IBKR adapter", () => {
         filled: 2,
         remaining: 0,
         avgPrice: 150
-      });
+      } as any);
 
-    vi.spyOn(adapter as unknown as { sleep: Function }, "sleep").mockResolvedValue(undefined);
+    vi.spyOn(adapter as any, "sleep").mockResolvedValue(undefined);
 
     const result = await adapter.submitOrder("AAPL", "BUY", 2, 150, "idem-fixed");
 
@@ -27,10 +27,10 @@ describe("IBKR adapter", () => {
 
   it("throws normalized broker error after retries are exhausted", async () => {
     const adapter = new IBKRAdapter("key", "acct-1");
-    vi.spyOn(adapter as unknown as { submitOrderWithTimeout: Function }, "submitOrderWithTimeout").mockRejectedValue(
+    vi.spyOn(adapter as any, "submitOrderWithTimeout").mockRejectedValue(
       new Error("Connection refused")
     );
-    vi.spyOn(adapter as unknown as { sleep: Function }, "sleep").mockResolvedValue(undefined);
+    vi.spyOn(adapter as any, "sleep").mockResolvedValue(undefined);
 
     await expect(adapter.submitOrder("AAPL", "BUY", 1)).rejects.toMatchObject({
       errorCode: "NETWORK_ERROR",

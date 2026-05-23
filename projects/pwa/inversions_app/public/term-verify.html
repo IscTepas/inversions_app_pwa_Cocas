@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TEAM-09 — Verificación Term Strategies</title>
+<style>
+  :root { --bg: #0f172a; --surface: #1e293b; --border: #334155; --text: #f1f5f9; --muted: #94a3b8; --accent: #38bdf8; --green: #22c55e; --red: #ef4444; --yellow: #eab308; --radius: 8px; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 24px; max-width: 960px; margin: 0 auto; font-size: 14px; }
+
+  .banner { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: var(--radius); margin-bottom: 14px; font-size: 0.85rem; line-height: 1.4; border: 1px solid; }
+  .banner-loading { background: #1e3a5f; border-color: #1e40af; color: #93c5fd; }
+  .banner-ok { background: #052e16; border-color: var(--green); color: #86efac; }
+  .banner-error { background: #450a0a; border-color: var(--red); color: #fca5a5; }
+  .banner code { background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 3px; font-size: 0.8rem; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid transparent; border-top-color: currentColor; border-radius: 50%; animation: spin .6s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .banner-icon { font-size: 1.1rem; flex-shrink: 0; }
+
+  h1 { font-size: 1.5rem; margin-bottom: 4px; }
+  h1 small { font-size: 0.8rem; color: var(--muted); font-weight: 400; display: block; margin-top: 2px; }
+  .disclaimer { background: #1e3a5f; border: 1px solid #1e40af; border-radius: var(--radius); padding: 10px 14px; font-size: 0.78rem; color: #93c5fd; margin: 12px 0 16px; line-height: 1.4; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+  .tab { padding: 10px 20px; border: 1px solid var(--border); border-radius: var(--radius) var(--radius) 0 0; background: var(--surface); color: var(--muted); cursor: pointer; font-size: 0.9rem; transition: .15s; user-select: none; }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--bg); border-bottom-color: var(--bg); color: var(--accent); font-weight: 600; }
+  .tab.disabled { opacity: .5; cursor: not-allowed; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+  .card h3 { font-size: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 12px; }
+  .field { flex: 1; min-width: 140px; }
+  .field label { display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 3px; }
+  .field input, .field select { width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; background: #0f172a; color: var(--text); font-size: 0.85rem; }
+  .field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
+  .btn { padding: 8px 20px; border: none; border-radius: var(--radius); background: var(--accent); color: #0f172a; font-weight: 600; cursor: pointer; font-size: 0.85rem; transition: .15s; }
+  .btn:hover { opacity: .85; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .metric-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .metric { background: #0f172a; border-radius: 6px; padding: 8px 14px; text-align: center; min-width: 90px; flex: 1; }
+  .metric .val { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .metric .lbl { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; margin-top: 2px; }
+  .positive { color: var(--green); }
+  .negative { color: var(--red); }
+  .neutral { color: var(--yellow); }
+  .tag { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
+  .tag-green { background: #14532d; color: var(--green); }
+  .tag-red { background: #450a0a; color: var(--red); }
+  .tag-blue { background: #1e3a5f; color: var(--accent); }
+  table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 500; }
+  td { padding: 5px 8px; border-bottom: 1px solid #1e293b; font-variant-numeric: tabular-nums; }
+  tr:hover td { background: #0f172a; }
+  .scroll { max-height: 320px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; }
+  .rec-box { text-align: center; padding: 20px; border-radius: var(--radius); margin-bottom: 12px; font-size: 1.3rem; font-weight: 700; }
+  .rec-calendar { background: #14532d; color: var(--green); border: 1px solid var(--green); }
+  .rec-diagonal { background: #1e3a5f; color: var(--accent); border: 1px solid var(--accent); }
+  .just { font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
+  .error-card { border-color: var(--red) !important; }
+  .error-card h3 { color: var(--red) !important; }
+  .error-card p { color: #fca5a5; }
+  .error-card code { display: block; background: #0f172a; padding: 8px 12px; border-radius: 4px; margin-top: 8px; color: #e2e8f0; font-size: 0.8rem; }
+  .winner-badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 700; margin-left: 4px; }
+  .winner-cal { background: #14532d; color: var(--green); }
+  .winner-diag { background: #1e3a5f; color: var(--accent); }
+  .winner-tie { background: #334155; color: var(--muted); }
+  .reason-cell { font-size: 0.75rem; color: var(--muted); font-style: italic; max-width: 220px; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+</head>
+<body>
+
+<h1>🔍 TEAM-09 — Verificación Term Strategies</h1>
+<small style="color:var(--muted)">Calendar Spread & Diagonal Spread — SquadISC</small>
+
+<div class="disclaimer">
+  ⚠️ <strong>RNF-001:</strong> Esta herramienta es solo para verificación técnica. No constituye asesoramiento financiero ni autoriza ejecución de operaciones. Toda decisión de inversión requiere juicio humano.
+</div>
+
+<div id="api-banner" class="banner banner-loading">
+  <span class="banner-icon">🔵</span>
+  <span class="spinner"></span>
+  <span>Verificando conexión con el backend...</span>
+</div>
+
+<div class="tabs" id="tab-bar">
+  <div class="tab active" data-tab="calendar" onclick="switchTab('calendar')">📅 Calendar Spread</div>
+  <div class="tab" data-tab="diagonal" onclick="switchTab('diagonal')">📐 Diagonal Spread</div>
+  <div class="tab" data-tab="compare" onclick="switchTab('compare')">⚖️ Comparador</div>
+</div>
+
+<!-- ===== PANEL CALENDAR ===== -->
+<div id="panel-calendar" class="panel active">
+  <div class="card">
+    <h3>Parámetros</h3>
+    <div class="row">
+      <div class="field"><label>Strike</label><input id="cal-strike" value="100"></div>
+      <div class="field"><label>Exp. Corta</label><input id="cal-exp-short" value="2026-06-19"></div>
+      <div class="field"><label>Exp. Larga</label><input id="cal-exp-long" value="2026-09-18"></div>
+      <div class="field"><label>Prima Corta</label><input id="cal-prem-short" value="2.50"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Prima Larga</label><input id="cal-prem-long" value="5.00"></div>
+      <div class="field"><label>Contratos</label><input id="cal-contracts" value="1"></div>
+      <div class="field"><label>Tipo</label><select id="cal-style"><option value="call">Call</option><option value="put">Put</option></select></div>
+      <div class="field"><label>Risk Free Rate</label><input id="cal-rfr" value="0.05"></div>
+    </div>
+    <details style="margin-bottom:10px;cursor:pointer;color:var(--muted);font-size:0.85rem">
+      <summary>Configuracion Monte Carlo</summary>
+      <div style="margin-top:8px" class="row">
+        <div class="field"><label>Iteraciones</label><input id="cal-mc-iters" value="1000" type="number" min="100" max="50000"></div>
+        <div class="field"><label>Distribucion</label><select id="cal-mc-dist"><option value="normal">Normal</option><option value="lognormal">Lognormal</option></select></div>
+        <div class="field"></div>
+        <div class="field"></div>
+      </div>
+    </details>
+    <button class="btn" id="btn-calendar" onclick="testCalendar()">▶ Probar Calendar Spread</button>
+  </div>
+  <div id="cal-result"></div>
+</div>
+
+<!-- ===== PANEL DIAGONAL ===== -->
+<div id="panel-diagonal" class="panel">
+  <div class="card">
+    <h3>Parámetros</h3>
+    <div class="row">
+      <div class="field"><label>Strike Corto</label><input id="diag-strike-short" value="95"></div>
+      <div class="field"><label>Strike Largo</label><input id="diag-strike-long" value="105"></div>
+      <div class="field"><label>Exp. Corta</label><input id="diag-exp-short" value="2026-06-19"></div>
+      <div class="field"><label>Exp. Larga</label><input id="diag-exp-long" value="2026-09-18"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Prima Corta</label><input id="diag-prem-short" value="3.50"></div>
+      <div class="field"><label>Prima Larga</label><input id="diag-prem-long" value="4.00"></div>
+      <div class="field"><label>Contratos</label><input id="diag-contracts" value="1"></div>
+      <div class="field"><label>Tipo</label><select id="diag-style"><option value="call">Call</option><option value="put">Put</option></select></div>
+      <div class="field"><label>Risk Free Rate</label><input id="diag-rfr" value="0.05"></div>
+    </div>
+    <details style="margin-bottom:10px;cursor:pointer;color:var(--muted);font-size:0.85rem">
+      <summary>Configuracion Monte Carlo</summary>
+      <div style="margin-top:8px" class="row">
+        <div class="field"><label>Iteraciones</label><input id="diag-mc-iters" value="1000" type="number" min="100" max="50000"></div>
+        <div class="field"><label>Distribucion</label><select id="diag-mc-dist"><option value="normal">Normal</option><option value="lognormal">Lognormal</option></select></div>
+        <div class="field"></div>
+        <div class="field"></div>
+      </div>
+    </details>
+    <button class="btn" id="btn-diagonal" onclick="testDiagonal()">▶ Probar Diagonal Spread</button>
+  </div>
+  <div id="diag-result"></div>
+</div>
+
+<!-- ===== PANEL COMPARE ===== -->
+<div id="panel-compare" class="panel">
+  <div class="card">
+    <h3>Contexto de Mercado</h3>
+    <div class="row">
+      <div class="field"><label>Volatilidad</label><select id="cmp-vol"><option value="low">Baja</option><option value="medium" selected>Media</option><option value="high">Alta</option></select></div>
+      <div class="field"><label>Horizonte</label><select id="cmp-hor"><option value="short">Corto</option><option value="medium">Medio</option><option value="long" selected>Largo</option></select></div>
+      <div class="field"><label>Dirección</label><select id="cmp-dir"><option value="bullish">Bullish</option><option value="neutral" selected>Neutral</option><option value="bearish">Bearish</option></select></div>
+      <div class="field"><label>Tolerancia</label><select id="cmp-risk"><option value="conservative" selected>Conservador</option><option value="moderate">Moderado</option><option value="aggressive">Agresivo</option></select></div>
+      <div class="field"><label>Precio Subyacente</label><input id="cmp-price" value="100" type="number" step="0.01"></div>
+    </div>
+    <details style="margin-bottom:10px;cursor:pointer;color:var(--muted);font-size:0.85rem">
+      <summary>Configurar legs manualmente</summary>
+      <div style="margin-top:8px">
+        <div style="font-size:0.8rem;color:var(--muted);margin-bottom:6px">Calendar legs (mismo strike):</div>
+        <div class="row">
+          <div class="field"><label>Strike</label><input id="cmp-cal-strike" value="100"></div>
+          <div class="field"><label>Exp. Corta</label><input id="cmp-cal-exp-s" value="2026-06-19"></div>
+          <div class="field"><label>Exp. Larga</label><input id="cmp-cal-exp-l" value="2026-09-18"></div>
+          <div class="field"><label>Prima Corta</label><input id="cmp-cal-prem-s" value="2.50"></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>Prima Larga</label><input id="cmp-cal-prem-l" value="5.00"></div>
+          <div class="field"><label>Contratos</label><input id="cmp-cal-ct" value="1"></div>
+          <div class="field"><label>Tipo</label><select id="cmp-cal-style"><option value="call">Call</option><option value="put">Put</option></select></div>
+          <div class="field"></div>
+        </div>
+        <div style="font-size:0.8rem;color:var(--muted);margin-bottom:6px;margin-top:8px">Diagonal legs (strikes diferentes):</div>
+        <div class="row">
+          <div class="field"><label>Strike Corto</label><input id="cmp-diag-strike-s" value="95"></div>
+          <div class="field"><label>Strike Largo</label><input id="cmp-diag-strike-l" value="105"></div>
+          <div class="field"><label>Exp. Corta</label><input id="cmp-diag-exp-s" value="2026-06-19"></div>
+          <div class="field"><label>Exp. Larga</label><input id="cmp-diag-exp-l" value="2026-09-18"></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>Prima Corta</label><input id="cmp-diag-prem-s" value="3.50"></div>
+          <div class="field"><label>Prima Larga</label><input id="cmp-diag-prem-l" value="4.00"></div>
+          <div class="field"><label>Contratos</label><input id="cmp-diag-ct" value="1"></div>
+          <div class="field"><label>Tipo</label><select id="cmp-diag-style"><option value="call">Call</option><option value="put">Put</option></select></div>
+        </div>
+      </div>
+    </details>
+    <button class="btn" id="btn-compare" onclick="testCompare()">▶ Comparar Estrategias</button>
+  </div>
+  <div id="cmp-result"></div>
+</div>
+
+<script>
+const API_BASE = '/api/v1/strategies/term';
+let apiOnline = false;
+
+function $(id) { return document.getElementById(id); }
+
+function switchTab(name) {
+  if (!apiOnline) return;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  $(`panel-${name}`).classList.add('active');
+}
+
+function fmt(v, d) { if (v === null || v === undefined) return '—'; if (typeof v === 'number' && !isNaN(v)) return Number(v.toFixed(d ?? 2)).toLocaleString(); return '—'; }
+function cls(v) { if (v === null || v === undefined || (typeof v === 'number' && isNaN(v))) return ''; return v > 0 ? 'positive' : v < 0 ? 'negative' : ''; }
+function tag(v, green, red) { return v === green ? `<span class="tag tag-green">${v}</span>` : v === red ? `<span class="tag tag-red">${v}</span>` : `<span class="tag tag-blue">${v}</span>`; }
+
+async function checkHealth() {
+  const banner = $('api-banner');
+  try {
+    const r = await fetch('/api/health', { method: 'GET', signal: AbortSignal.timeout(3000) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    apiOnline = true;
+    banner.className = 'banner banner-ok';
+    banner.innerHTML = '<span class="banner-icon">✅</span><span><strong>API Conectada</strong> — Backend activo en localhost:3000</span>';
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('disabled'));
+    document.querySelectorAll('.btn').forEach(b => b.disabled = false);
+  } catch (e) {
+    apiOnline = false;
+    banner.className = 'banner banner-error';
+    banner.innerHTML = `
+      <span class="banner-icon">❌</span>
+      <div>
+        <strong>API Desconectada</strong> — El backend no responde<br>
+        Para activarlo, abre una terminal y ejecuta:<br>
+        <code>cd projects/rest-api/inversions_api && npm run dev</code>
+      </div>`;
+    document.querySelectorAll('.tab').forEach(t => { t.classList.add('disabled'); if (!t.classList.contains('active')) t.style.pointerEvents = 'none'; });
+    document.querySelectorAll('.btn').forEach(b => b.disabled = true);
+  }
+}
+
+async function post(url, body) {
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) { const e = await r.json().catch(() => ({ error: r.statusText })); throw new Error(e.error || e.message || r.statusText); }
+  return r.json();
+}
+
+function showResult(el, html) { el.innerHTML = html; }
+
+function showError(el, msg) {
+  el.innerHTML = `
+    <div class="card error-card">
+      <h3>Error</h3>
+      <p>${msg}</p>
+      <code>cd projects/rest-api/inversions_api && npm run dev</code>
+    </div>`;
+}
+
+// === CALENDAR ===
+function buildCalendarBody() {
+  const s = $('cal-strike').value;
+  return {
+    legs: [
+      { strike: Number(s), expiration: $('cal-exp-short').value, premium: Number($('cal-prem-short').value), contracts: Number($('cal-contracts').value), optionStyle: $('cal-style').value },
+      { strike: Number(s), expiration: $('cal-exp-long').value, premium: Number($('cal-prem-long').value), contracts: Number($('cal-contracts').value), optionStyle: $('cal-style').value }
+    ],
+    riskFreeRate: Number($('cal-rfr').value),
+    monteCarlo: {
+      iterations: Number($('cal-mc-iters').value),
+      distribution: $('cal-mc-dist').value
+    }
+  };
+}
+
+async function testCalendar() {
+  const el = $('cal-result');
+  el.innerHTML = '<p style="color:var(--muted)">Cargando…</p>';
+  try {
+    const d = await post(`${API_BASE}/calendar`, buildCalendarBody());
+    const a = d.analysis || {};
+    el.innerHTML = `
+      <div class="card">
+        <h3>Métricas Clave</h3>
+        <div class="metric-grid">
+          <div class="metric"><div class="val ${cls(a.netTheta)}">${fmt(a.netTheta)}</div><div class="lbl">Theta Neta</div></div>
+          <div class="metric"><div class="val">${fmt(a.shortDte,0)}</div><div class="lbl">DTE Corto</div></div>
+          <div class="metric"><div class="val">${fmt(a.longDte,0)}</div><div class="lbl">DTE Largo</div></div>
+          <div class="metric"><div class="val ${cls(a.shortTheta)}">${fmt(a.shortTheta)}</div><div class="lbl">θ Corta</div></div>
+          <div class="metric"><div class="val ${cls(a.longTheta)}">${fmt(a.longTheta)}</div><div class="lbl">θ Larga</div></div>
+        </div>
+      </div>
+      ${d.report ? buildPayoffTable(d.report.payoffCurve) : ''}
+      ${d.report ? buildRiskMetrics(d.report.riskMetrics) : ''}
+      ${d.report && d.report.surface ? buildSurfaceInfo(d.report.surface) : ''}
+      <div class="card">
+        <h3>Escenarios de Precio (${d.scenarios?.length ?? 0})</h3>
+        <div class="scroll">
+          <table><thead><tr><th>Precio</th><th>Valor Estrat.</th><th>P&amp;L</th><th>θ</th></tr></thead>
+          <tbody>${(d.scenarios || []).map(s => `<tr><td>$${fmt(s.underlyingPrice,1)}</td><td>$${fmt(s.strategyValue)}</td><td class="${cls(s.pnl)}">$${fmt(s.pnl)}</td><td class="${cls(s.theta)}">${fmt(s.theta)}</td></tr>`).join('')}</tbody></table>
+        </div>
+      </div>
+      ${d.report?.stressTests ? buildStressTests(d.report.stressTests) : ''}
+      ${d.report?.probabilityCone ? buildProbabilityCone(d.report.probabilityCone) : ''}
+      ${d.simulation?.monteCarlo ? buildMonteCarloSection(d.simulation.monteCarlo) : ''}
+      <p style="color:var(--muted);font-size:0.75rem">generatedAt: ${d.report?.generatedAt ?? '—'}</p>
+    `;
+  } catch (e) { showError(el, e.message); }
+}
+
+// === DIAGONAL ===
+function buildDiagonalBody() {
+  return {
+    legs: [
+      { strike: Number($('diag-strike-short').value), expiration: $('diag-exp-short').value, premium: Number($('diag-prem-short').value), contracts: Number($('diag-contracts').value), optionStyle: $('diag-style').value },
+      { strike: Number($('diag-strike-long').value), expiration: $('diag-exp-long').value, premium: Number($('diag-prem-long').value), contracts: Number($('diag-contracts').value), optionStyle: $('diag-style').value }
+    ],
+    riskFreeRate: Number($('diag-rfr').value),
+    monteCarlo: {
+      iterations: Number($('diag-mc-iters').value),
+      distribution: $('diag-mc-dist').value
+    }
+  };
+}
+
+async function testDiagonal() {
+  const el = $('diag-result');
+  el.innerHTML = '<p style="color:var(--muted)">Cargando…</p>';
+  try {
+    const d = await post(`${API_BASE}/diagonal`, buildDiagonalBody());
+    const a = d.analysis || {};
+    const g = a.greeks || {};
+    el.innerHTML = `
+      <div class="card">
+        <h3>Métricas Clave</h3>
+        <div class="metric-grid">
+          <div class="metric"><div class="val ${cls(g.delta)}">${fmt(g.delta)}</div><div class="lbl">Δ Neta</div></div>
+          <div class="metric"><div class="val ${cls(g.gamma)}">${fmt(g.gamma)}</div><div class="lbl">Γ Neta</div></div>
+          <div class="metric"><div class="val ${cls(g.theta)}">${fmt(g.theta)}</div><div class="lbl">θ Neta</div></div>
+          <div class="metric"><div class="val ${cls(g.vega)}">${fmt(g.vega)}</div><div class="lbl">V Neta</div></div>
+          <div class="metric"><div class="val">${fmt(a.shortDte,0)}</div><div class="lbl">DTE Corto</div></div>
+          <div class="metric"><div class="val">${fmt(a.longDte,0)}</div><div class="lbl">DTE Largo</div></div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <div><span style="color:var(--muted);font-size:0.8rem">Perfil: </span>${tag(a.directionalProfile,'neutral','bullish')}</div>
+          <div><span style="color:var(--muted);font-size:0.8rem">Ajuste: </span>${a.adjustmentWindow ? '<span class="tag tag-red">Requiere ajuste</span>' : '<span class="tag tag-green">Sin ajuste</span>'}</div>
+        </div>
+      </div>
+      ${d.report ? buildPayoffTable(d.report.payoffCurve) : ''}
+      ${d.report ? buildRiskMetrics(d.report.riskMetrics) : ''}
+      <div class="card">
+        <h3>Escenarios de Precio (${d.scenarios?.length ?? 0})</h3>
+        <div class="scroll">
+          <table><thead><tr><th>Precio</th><th>Valor</th><th>P&amp;L</th><th>Δ</th><th>θ</th><th>V</th></tr></thead>
+          <tbody>${(d.scenarios || []).map(s => `<tr><td>$${fmt(s.underlyingPrice,1)}</td><td>$${fmt(s.strategyValue)}</td><td class="${cls(s.pnl)}">$${fmt(s.pnl)}</td><td class="${cls(s.greeks?.delta)}">${fmt(s.greeks?.delta)}</td><td class="${cls(s.greeks?.theta)}">${fmt(s.greeks?.theta)}</td><td class="${cls(s.greeks?.vega)}">${fmt(s.greeks?.vega)}</td></tr>`).join('')}</tbody></table>
+        </div>
+      </div>
+      ${d.report?.stressTests ? buildStressTests(d.report.stressTests) : ''}
+      ${d.report?.probabilityCone ? buildProbabilityCone(d.report.probabilityCone) : ''}
+      ${d.simulation?.monteCarlo ? buildMonteCarloSection(d.simulation.monteCarlo) : ''}
+      <p style="color:var(--muted);font-size:0.75rem">generatedAt: ${d.report?.generatedAt ?? '—'}</p>
+    `;
+  } catch (e) { showError(el, e.message); }
+}
+
+// === COMPARE ===
+function buildCompareBody() {
+  const calS = $('cmp-cal-strike').value;
+  return {
+    underlyingPrice: Number($('cmp-price').value) || undefined,
+    marketVolatility: $('cmp-vol').value,
+    timeHorizon: $('cmp-hor').value,
+    direction: $('cmp-dir').value,
+    riskTolerance: $('cmp-risk').value,
+    calendarLegs: [
+      { strike: Number(calS), expiration: $('cmp-cal-exp-s').value, premium: Number($('cmp-cal-prem-s').value), contracts: Number($('cmp-cal-ct').value), optionStyle: $('cmp-cal-style').value },
+      { strike: Number(calS), expiration: $('cmp-cal-exp-l').value, premium: Number($('cmp-cal-prem-l').value), contracts: Number($('cmp-cal-ct').value), optionStyle: $('cmp-cal-style').value }
+    ],
+    diagonalLegs: [
+      { strike: Number($('cmp-diag-strike-s').value), expiration: $('cmp-diag-exp-s').value, premium: Number($('cmp-diag-prem-s').value), contracts: Number($('cmp-diag-ct').value), optionStyle: $('cmp-diag-style').value },
+      { strike: Number($('cmp-diag-strike-l').value), expiration: $('cmp-diag-exp-l').value, premium: Number($('cmp-diag-prem-l').value), contracts: Number($('cmp-diag-ct').value), optionStyle: $('cmp-diag-style').value }
+    ]
+  };
+}
+
+async function testCompare() {
+  const el = $('cmp-result');
+  el.innerHTML = '<p style="color:var(--muted)">Cargando…</p>';
+  try {
+    const d = await post(`${API_BASE}/compare`, buildCompareBody());
+    const isCal = d.recommendation === 'calendar';
+    const cal = d.calendar || {};
+    const diag = d.diagonal || {};
+    const met = d.metricas || [];
+
+    el.innerHTML = `
+      <div class="card">
+        <div class="rec-box ${isCal ? 'rec-calendar' : 'rec-diagonal'}">
+          ${isCal ? '📅' : '📐'} Recomendación: ${d.recommendation.toUpperCase()} <span style="font-size:0.8rem;opacity:.8">(score: ${fmt(d.scores?.calendar)} vs ${fmt(d.scores?.diagonal)})</span>
+        </div>
+        <p class="just">${d.justification}</p>
+      </div>
+      <div class="card">
+        <h3>📈 Payoff Superpuesto — Calendar vs Diagonal</h3>
+        <div style="position:relative">
+          <canvas id="cmp-chart" height="340"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h3>💰 Capital &amp; Riesgo</h3>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Métrica</th><th>📅 Calendar</th><th>📐 Diagonal</th><th>¿Por qué es mejor?</th></tr></thead>
+            <tbody>${met.filter(m => m.category === 'capital').map(m => renderMetRow(m, isCal)).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h3>📊 Exposición Griegas</h3>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Griega</th><th>📅 Calendar</th><th>📐 Diagonal</th><th>¿Por qué es mejor?</th></tr></thead>
+            <tbody>${met.filter(m => m.category === 'greeks').map(m => renderMetRow(m, isCal)).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h3>⏳ DTE (Días hasta Vencimiento)</h3>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Pata</th><th>📅 Calendar</th><th>📐 Diagonal</th><th>¿Por qué es mejor?</th></tr></thead>
+            <tbody>${met.filter(m => m.category === 'dte').map(m => renderMetRow(m, isCal)).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+    `;
+
+    // Render chart
+    if (cal.payoffCurveT0 && cal.payoffCurveT0.length > 0 && diag.payoffCurveT0 && diag.payoffCurveT0.length > 0) {
+      renderCompareChart(cal, diag);
+    }
+  } catch (e) { showError(el, e.message); }
+}
+
+function renderMetRow(m, isCal) {
+  const wClass = m.winner === 'calendar' ? 'winner-cal' : m.winner === 'diagonal' ? 'winner-diag' : 'winner-tie';
+  const wLabel = m.winner === 'calendar' ? '📅' : m.winner === 'diagonal' ? '📐' : '⚖️';
+  const calCls = m.winner === 'calendar' ? 'positive' : '';
+  const diagCls = m.winner === 'diagonal' ? 'positive' : '';
+  const isPct = m.label === 'Prob. de Ganancia';
+  const isDte = m.label.startsWith('DTE');
+  return `<tr>
+    <td>${m.label}</td>
+    <td class="${calCls}">${isPct ? fmt(m.calendar*100,1)+'%' : (isDte ? fmt(m.calendar,0)+'d' : (m.label==='Costo Neto'||m.label==='Pérdida Máxima'||m.label==='Ganancia Máxima' ? '$'+fmt(m.calendar) : fmt(m.calendar)))}</td>
+    <td class="${diagCls}">${isPct ? fmt(m.diagonal*100,1)+'%' : (isDte ? fmt(m.diagonal,0)+'d' : (m.label==='Costo Neto'||m.label==='Pérdida Máxima'||m.label==='Ganancia Máxima' ? '$'+fmt(m.diagonal) : fmt(m.diagonal)))}</td>
+    <td class="reason-cell"><span class="winner-badge ${wClass}">${wLabel} ${m.winner.toUpperCase()}</span> ${m.reason}</td>
+  </tr>`;
+}
+
+function renderCompareChart(cal, diag) {
+  const canvas = document.getElementById('cmp-chart');
+  if (!canvas) return;
+
+  // Destroy previous chart if exists
+  if (window._cmpChart) { window._cmpChart.destroy(); }
+
+  const green = '#22c55e';
+  const blue = '#38bdf8';
+  const calT0 = (cal.payoffCurveT0 || []).map(p => ({ x: p.price, y: p.pnl }));
+  const calExp = (cal.payoffCurveExpiration || []).map(p => ({ x: p.price, y: p.pnl }));
+  const diagT0 = (diag.payoffCurveT0 || []).map(p => ({ x: p.price, y: p.pnl }));
+  const diagExp = (diag.payoffCurveExpiration || []).map(p => ({ x: p.price, y: p.pnl }));
+
+  const allPrices = [...calT0, ...calExp, ...diagT0, ...diagExp].map(p => p.x);
+  const xMin = Math.min(...allPrices);
+  const xMax = Math.max(...allPrices);
+
+  const annotations = {
+    line0: {
+      type: 'line', yMin: 0, yMax: 0,
+      borderColor: '#64748b', borderWidth: 1, borderDash: [3,3],
+      label: { display: false },
+    },
+    currentPrice: {
+      type: 'line',
+      xMin: cal.currentPrice, xMax: cal.currentPrice,
+      borderColor: '#f59e0b', borderWidth: 2,
+      label: {
+        display: true, content: 'Precio Actual $' + fmt(cal.currentPrice,1),
+        position: 'start', backgroundColor: '#f59e0b', color: '#0f172a',
+        font: { weight: 'bold', size: 10 },
+      },
+    },
+  };
+
+  // Add break-even annotations
+  (cal.breakEvens || []).forEach((be, i) => {
+    annotations['be_cal_' + i] = {
+      type: 'point', xValue: be, yValue: 0,
+      backgroundColor: green, radius: 5,
+      label: { display: true, content: 'BE $' + fmt(be,1), position: 'below', backgroundColor: green, color: '#0f172a', font: { size: 9 } },
+    };
+  });
+  (diag.breakEvens || []).forEach((be, i) => {
+    annotations['be_diag_' + i] = {
+      type: 'point', xValue: be, yValue: 0,
+      backgroundColor: blue, radius: 5,
+      label: { display: true, content: 'BE $' + fmt(be,1), position: 'above', backgroundColor: blue, color: '#0f172a', font: { size: 9 } },
+    };
+  });
+
+  window._cmpChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      datasets: [
+        {
+          label: 'Calendar (Hoy)',
+          data: calT0,
+          borderColor: green,
+          backgroundColor: green + '33',
+          borderDash: [6,4],
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.3,
+        },
+        {
+          label: 'Calendar (Exp. Short)',
+          data: calExp,
+          borderColor: green,
+          backgroundColor: green + '11',
+          borderWidth: 3,
+          pointRadius: 0,
+          tension: 0.3,
+        },
+        {
+          label: 'Diagonal (Hoy)',
+          data: diagT0,
+          borderColor: blue,
+          backgroundColor: blue + '33',
+          borderDash: [6,4],
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.3,
+        },
+        {
+          label: 'Diagonal (Exp. Short)',
+          data: diagExp,
+          borderColor: blue,
+          backgroundColor: blue + '11',
+          borderWidth: 3,
+          pointRadius: 0,
+          tension: 0.3,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'top',
+          labels: { color: '#94a3b8', font: { size: 11 }, usePointStyle: true, pointStyle: 'line' },
+        },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          titleColor: '#f1f5f9',
+          bodyColor: '#94a3b8',
+          borderColor: '#334155',
+          borderWidth: 1,
+          callbacks: {
+            label: function(ctx) {
+              return ctx.dataset.label + ' → Precio: $' + fmt(ctx.parsed.x,1) + ' | P&L: $' + fmt(ctx.parsed.y);
+            },
+          },
+        },
+        annotation: {
+          annotations: annotations,
+        },
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Precio del Subyacente ($)', color: '#94a3b8' },
+          grid: { color: '#1e293b' },
+          ticks: { color: '#64748b' },
+          min: xMin,
+          max: xMax,
+        },
+        y: {
+          title: { display: true, text: 'P&L ($)', color: '#94a3b8' },
+          grid: { color: '#1e293b' },
+          ticks: { color: '#64748b' },
+        },
+      },
+    },
+  });
+}
+
+function buildMonteCarloSection(mc) {
+  if (!mc) return '';
+  return `<div class="card">
+    <h3>Simulacion Monte Carlo (${mc.iterations ?? '?'} iteraciones)</h3>
+    <div class="metric-grid">
+      <div class="metric"><div class="val ${cls(mc.meanPnl)}">${fmt(mc.meanPnl)}</div><div class="lbl">P&L Medio</div></div>
+      <div class="metric"><div class="val ${cls(mc.medianPnl)}">${fmt(mc.medianPnl)}</div><div class="lbl">P&L Mediana</div></div>
+      <div class="metric"><div class="val ${cls(mc.percentile5)}">${fmt(mc.percentile5)}</div><div class="lbl">P&L P5</div></div>
+      <div class="metric"><div class="val ${cls(mc.percentile95)}">${fmt(mc.percentile95)}</div><div class="lbl">P&L P95</div></div>
+      <div class="metric"><div class="val ${cls(mc.var95)}">${fmt(mc.var95)}</div><div class="lbl">VaR 95%</div></div>
+      <div class="metric"><div class="val">${mc.pnlDistribution?.length ?? 0}</div><div class="lbl">Trayectorias</div></div>
+    </div>
+  </div>`;
+}
+
+// === HELPERS ===
+function buildPayoffTable(curve) {
+  if (!curve || curve.length === 0) return '';
+  const anchor = curve.find(p => p.pnl === 0);
+  return `<div class="card">
+    <h3>Curva de Payoff (${curve.length} pts) ${anchor ? `— ATM ≡ $${fmt(anchor.price,1)}` : ''}</h3>
+    <div class="scroll">
+      <table><thead><tr><th>Precio</th><th>Payoff</th><th>P&amp;L</th></tr></thead>
+      <tbody>${curve.map(p => `<tr><td>$${fmt(p.price,1)}</td><td>$${fmt(p.payoff)}</td><td class="${cls(p.pnl)}">$${fmt(p.pnl)}</td></tr>`).join('')}</tbody></table>
+    </div>
+  </div>`;
+}
+
+function buildRiskMetrics(m) {
+  if (!m) return '';
+  return `<div class="card">
+    <h3>Métricas de Riesgo</h3>
+    <div class="metric-grid">
+      <div class="metric"><div class="val ${cls(m.netDelta)}">${fmt(m.netDelta)}</div><div class="lbl">Δ</div></div>
+      <div class="metric"><div class="val ${cls(m.netGamma)}">${fmt(m.netGamma)}</div><div class="lbl">Γ</div></div>
+      <div class="metric"><div class="val ${cls(m.netTheta)}">${fmt(m.netTheta)}</div><div class="lbl">θ</div></div>
+      <div class="metric"><div class="val ${cls(m.netVega)}">${fmt(m.netVega)}</div><div class="lbl">V</div></div>
+      <div class="metric"><div class="val">${fmt(m.probabilityOfProfit*100,1)}%</div><div class="lbl">POP</div></div>
+      <div class="metric"><div class="val">${fmt(m.sharpeRatio)}</div><div class="lbl">Sharpe</div></div>
+      <div class="metric"><div class="val ${cls(m.stressTestMaxLoss)}">${fmt(m.stressTestMaxLoss)}</div><div class="lbl">Stress Máx Pérdida</div></div>
+      <div class="metric"><div class="val ${cls(m.stressTestMaxGain)}">${fmt(m.stressTestMaxGain)}</div><div class="lbl">Stress Máx Ganancia</div></div>
+      <div class="metric"><div class="val ${cls(m.expectedShortfall)}">${fmt(m.expectedShortfall)}</div><div class="lbl">Expected Shortfall</div></div>
+    </div>
+  </div>`;
+}
+
+function buildSurfaceInfo(s) {
+  if (!s) return '';
+  return `<div class="card">
+    <h3>Superficie Tiempo-Precio-IV</h3>
+    <div class="row">
+      <div class="field"><label>Rango Precios</label><span style="color:var(--text)">$${fmt(s.priceAxis?.[0],1)} → $${fmt(s.priceAxis?.[s.priceAxis.length-1],1)}</span></div>
+      <div class="field"><label>Rango DTE</label><span style="color:var(--text)">${fmt(s.dteAxis?.[0],0)}d → ${fmt(s.dteAxis?.[s.dteAxis.length-1],0)}d</span></div>
+      <div class="field"><label>Filas (DTE)</label><span style="color:var(--text)">${s.pnlMatrix?.length ?? 0}</span></div>
+      <div class="field"><label>Columnas (Precio)</label><span style="color:var(--text)">${s.pnlMatrix?.[0]?.length ?? 0}</span></div>
+    </div>
+  </div>`;
+}
+
+function buildStressTests(stressTests) {
+  if (!stressTests || stressTests.length === 0) return '';
+  return `<div class="card">
+    <h3>Stress Tests (${stressTests.length} escenarios)</h3>
+    <div class="scroll">
+      <table><thead><tr><th>Escenario</th><th>Descripción</th><th>Precio</th><th>Valor Estrat.</th><th>P&amp;L</th></tr></thead>
+      <tbody>${stressTests.map(s => `<tr><td><strong>${s.label}</strong></td><td style="color:var(--muted);font-size:0.75rem">${s.description}</td><td>$${fmt(s.underlyingPrice,1)}</td><td>$${fmt(s.strategyValue)}</td><td class="${cls(s.pnl)}">$${fmt(s.pnl)}</td></tr>`).join('')}</tbody></table>
+    </div>
+  </div>`;
+}
+
+function buildProbabilityCone(cone) {
+  if (!cone || cone.length === 0) return '';
+  const c = cone[0];
+  return `<div class="card">
+    <h3>Probability Cone (DTE ${c.dte}d)</h3>
+    <div class="metric-grid">
+      <div class="metric"><div class="val ${cls(c.percentile5)}">${fmt(c.percentile5)}</div><div class="lbl">P5</div></div>
+      <div class="metric"><div class="val ${cls(c.percentile25)}">${fmt(c.percentile25)}</div><div class="lbl">P25</div></div>
+      <div class="metric"><div class="val ${cls(c.median)}">${fmt(c.median)}</div><div class="lbl">Mediana</div></div>
+      <div class="metric"><div class="val ${cls(c.percentile75)}">${fmt(c.percentile75)}</div><div class="lbl">P75</div></div>
+      <div class="metric"><div class="val ${cls(c.percentile95)}">${fmt(c.percentile95)}</div><div class="lbl">P95</div></div>
+    </div>
+  </div>`;
+}
+
+// === INIT ===
+window.onload = function() {
+  document.querySelectorAll('.btn').forEach(b => b.disabled = true);
+  checkHealth();
+};
+</script>
+</body>
+</html>

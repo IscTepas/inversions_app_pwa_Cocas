@@ -1,6 +1,14 @@
 # Feature Speckit: Calendar Spread & Diagonal Spread
 ## TEAM-09 — SquadISC
 
+<!--
+  ARCHIVO: spec.md — Especificacion Speckit para TEAM-09
+  GENERADO POR: speckit.specify (via /diana.integrate)
+  CANON DE ENTRADA: teams/TEAM-09/spec.md (Diana)
+  PROPOSITO: Define el alcance, modulos, tareas, contratos y riesgos del feature.
+  CONSUMIDO POR: speckit.plan (genera plan.md), speckit.tasks (genera tasks.md),
+                  speckit.implement (guia implementacion), TEAM-09 (desarrollo)
+-->
 **Proyecto**: diana-inversions
 **Iniciativa**: 001-inversions
 **Equipo**: TEAM-09 (SquadISC)
@@ -9,7 +17,7 @@
 **Idioma**: es
 **Generado desde**: /diana.integrate action="run" engine="speckit" project="diana-inversions" initiative="001-inversions" team="TEAM-09" run_only="specify" language="es"
 **Canon de entrada**: teams/TEAM-09/spec.md
-**Version**: 1.0
+**Version**: 1.2
 **Estado**: Draft Speckit
 
 ---
@@ -20,7 +28,12 @@ Implementar el modelado, calculo, simulacion y exposition de las estrategias de 
 
 Este feature es el slice operativo del equipo TEAM-09 dentro de la iniciativa 001-inversions, en topologia multi-equipo.
 
----
+<!--
+  SECCION 2-3: Requerimientos Funcionales y No Funcionales
+  FUENTE: Canon Diana (teams/TEAM-09/spec.md)
+  PROPOSITO: Define RF-001 a RF-006 (funcional) y RNF-001 a RNF-006 (no funcional).
+  Trazabilidad directa: RF-001..RF-005 -> T162-T169; RF-004 -> S-T09-C01; RNF-006 -> T196-T198,T202,T203
+-->
 
 ## 2. Requerimientos Funcionales (desde canon Diana)
 
@@ -32,6 +45,9 @@ Este feature es el slice operativo del equipo TEAM-09 dentro de la iniciativa 00
 | RF-004 | Integrar un Chat IA para explicar el proposito, riesgo y condiciones de uso | Media |
 | RF-005 | Publicar salidas estructuradas para consumo por otros equipos y Speckit | Alta |
 | RF-006 | Mantener trazabilidad entre estructura temporal, estrategia y decision sugerida | Alta |
+| RF-007 | Implementar escenarios de stress test en engines (crash, rally, IV expansion/contraction) para evaluar comportamiento en condiciones extremas de mercado | Media |
+| RF-008 | Implementar estimador forward IV para pricing preciso de la pata larga en Calendar/Diagonal Spread | Media |
+| RF-009 | Generar probability cone y metricas extendidas (CVaR, stress P&L) en el reporte estructurado | Media |
 
 ---
 
@@ -46,7 +62,16 @@ Este feature es el slice operativo del equipo TEAM-09 dentro de la iniciativa 00
 | RNF-005 | El componente debe conservar contratos estables de integracion | Alta |
 | RNF-006 | Cada modulo o historia de usuario implementada DEBE contar con tests automatizados (unit e integration) que cubran la logica de negocio critica, los contratos de API y los flujos de error, con cobertura minima del 80% en rutas criticas | Alta |
 
----
+<!--
+  SECCION 4: Arquitectura de Modulos
+  FUENTE: Speckit expansion desde canon Diana
+  PROPOSITO: Describe los 9 modulos a implementar. Cada modulo tiene su archivo .ts
+  y su tarea asociada (T162-T169, S-T09-C01).
+  MAPEO: T162(termStrategyContract) -> T163(calendarSpreadEngine) -> T164(diagonalSpreadEngine)
+         -> T165(termSimulationEngine) -> T166(termRiskEngine) -> T169(termRollOrchestrator)
+         -> T167(termReportEngine) -> T168(3 endpoints REST) -> S-T09-C01(termChatAssistant)
+  NOTA: termUtils.ts NO aparece en spec.md pero fue creado como utilidad compartida
+-->
 
 ## 4. Arquitectura de Modulos (Speckit expansion)
 
@@ -75,7 +100,17 @@ Este feature es el slice operativo del equipo TEAM-09 dentro de la iniciativa 00
 - `termRollOrchestrator.ts` — Reglas de roll/ajuste, cierre anticipado y control de deterioro temporal
 
 ### 4.8 Chat IA Explicativo
-- `termChatAssistant.ts` — Integracion con Chat IA para explicar proposito, riesgo y condiciones de uso de cada estructura temporal
+- `termChatAssistant.ts` — Integracion con Chat IA para explicar el proposito, riesgo y condiciones de uso de cada estructura temporal
+
+### 4.9 Forward IV Utility
+- `termUtils.ts` — Funcion `estimateForwardIv()` que calcula la volatilidad forward implicita entre dos tenores usando `sqrt((IV₂²·T₂ − IV₁²·T₁) / (T₂−T₁))`, mejorando el pricing de la pata larga cuando se provee curva IV. Incluye fallback conservador cuando la formula produce numerador negativo (extrema backwardation)
+- Impacto directo en RF-008 y en la precision del pricing en calendarSpreadEngine y diagonalSpreadEngine
+
+### 4.10 Stress Tests en Engines
+- `calendarSpreadEngine.ts` — Generacion de 5 escenarios de stress predefinidos (Market Crash, Sharp Rally, IV Expansion, IV Contraction, Volatility Spike) con label, descripcion, precio estimado, P&L y cambios en IV por escenario
+- `diagonalSpreadEngine.ts` — Mismos 5 escenarios de stress con reporte adicional de las 4 griegas (delta, gamma, theta, vega) por escenario
+- Las salidas de stress tests se integran en `termReportEngine.ts` como parte de `StructuredReport.stressTests`
+- Impacto directo en RF-007 y RF-009
 
 ---
 
@@ -87,6 +122,7 @@ Este feature es el slice operativo del equipo TEAM-09 dentro de la iniciativa 00
             +-----------+-----------+
             |                       |
    [calendarSpreadEngine]  [diagonalSpreadEngine]
+   (stressTests)            (stressTests + Greeks)
             |                       |
             +-----------+-----------+
                         |
@@ -97,7 +133,9 @@ Este feature es el slice operativo del equipo TEAM-09 dentro de la iniciativa 00
             +-----------+-----------+
             |                       |
    [termReportEngine]    [termRollOrchestrator]
-            |                       |
+   (probabilityCone,     |
+    stressTests,         |
+    CVaR/metrics)        |
             +-----------+-----------+
                         |
                   [API Layer]
@@ -106,9 +144,21 @@ Este feature es el slice operativo del equipo TEAM-09 dentro de la iniciativa 00
                   [Chat IA Explicativo]
                         |
               [Consumo Frontend / Otros Equipos]
+
+        [termUtils (shared utility)]
+         (estimateForwardIv)
 ```
 
----
+<!--
+  SECCION 6: Tareas Canonicas Asociadas
+  FUENTE: Canon Diana teams/TEAM-09/tasks.md + adiciones Speckit v2
+  PROPOSITO: Lista completa de tareas del feature, incluyendo las 9 canonicas (T162-T169, T177),
+  las canonicas de tests (T196-T198) y las 5 adiciones Speckit v2 (T199-T203).
+  NOTA: Las tareas T199-T203 fueron detectadas durante auditoria de calidad posterior
+  a la implementacion inicial y completadas en la implementacion.
+  Las tareas T204-T206 son adiciones Speckit v3 para features extendidas (stress tests,
+  forward IV estimator, report extendido).
+-->
 
 ## 6. Tareas Canonicas Asociadas (desde teams/TEAM-09/tasks.md)
 
@@ -126,8 +176,24 @@ Este feature es el slice operativo del equipo TEAM-09 dentro de la iniciativa 00
 | T196 | Tests unitarios calendar/diagonal engines | Tests |
 | T197 | Tests unitarios simulacion y orquestador | Tests |
 | T198 | Tests de integracion para routes | Tests |
+| T199 | Documentacion OpenAPI/Swagger para endpoints Term | calendarSpread.ts, diagonalSpread.ts, termComparator.ts |
+| T200 | Validacion de fechas en contrato base (Invalid Date, fechas pasadas) | termStrategyContract.ts |
+| T201 | Monte Carlo default en APIs + UI en term-verify.html | calendarSpread.ts, diagonalSpread.ts, term-verify.html |
+| T202 | Cobertura tests termChatAssistant ≥80% | termChatAssistant.test.ts |
+| T203 | Cobertura tests termReportEngine branch ≥80% | termReportEngine.test.ts |
+| T204 | Implementar stress tests en engines (5 escenarios predefinidos) | calendarSpreadEngine.ts, diagonalSpreadEngine.ts |
+| T205 | Implementar estimador forward IV para pricing de pata larga | termUtils.ts |
+| T206 | Extender report engine con probability cone y metricas CVaR/stress P&L | termReportEngine.ts |
+| T207 | Enriquecer CalendarSpreadEngine con griegas delta, gamma, vega completas | calendarSpreadEngine.ts |
+| T208 | Expandir endpoint comparador (termComparator) con 3 bloques side-by-side (Capital & Risk, Greeks, DTE) | termComparator.ts |
+| T209 | Agregar helpers estáticos calculateBreakEvens y calculateNetCost en termReportEngine | termReportEngine.ts |
 
----
+<!--
+  SECCION 7-9: Restricciones, Supuestos, Criterios de Exito
+  FUENTE: Canon Diana
+  PROPOSITO: Definen los limites del feature: no auto-trading, topologia multi_team,
+  alcance limitado a Calendar/Diagonal, IA solo explicativa (RNF-001).
+-->
 
 ## 7. Restricciones Tecnicas (desde canon Diana)
 
@@ -156,7 +222,12 @@ Este feature es el slice operativo del equipo TEAM-09 dentro de la iniciativa 00
 - El alcance del equipo no invade dominios de volatilidad, noticias o broker
 - Las salidas pueden integrarse con Speckit sin perder la autoridad canonica
 
----
+<!--
+  SECCION 10: Trazabilidad
+  FUENTE: Canon Diana
+  PROPOSITO: Conecta este spec con la constitucion, UCC y scope_primario de la iniciativa.
+  RELACION: Se vincula con 001-INV-UCC (cambio), scope_primario.md y 001-inv-spec.md.
+-->
 
 ## 10. Trazabilidad (desde canon Diana)
 
@@ -165,7 +236,13 @@ Este feature es el slice operativo del equipo TEAM-09 dentro de la iniciativa 00
 - **Fuente de division funcional**: scope_primario.md
 - **Relacion con canon global**: derivada de 001-inv-spec.md
 
----
+<!--
+  SECCION 11-12: Riesgos y Contratos de Integracion
+  FUENTE: Speckit expansion
+  PROPOSITO: R-01 a R-04 documentan riesgos del modelado temporal.
+  Contratos de entrada: auth-context, broker-adapter, signal-lifecycle (consumidos por TEAM-09).
+  Contratos de salida: API REST JSON + metricas theta para TEAM-01.
+-->
 
 ## 11. Riesgos Identificados (Speckit expansion)
 
@@ -189,13 +266,18 @@ Este feature es el slice operativo del equipo TEAM-09 dentro de la iniciativa 00
 - API REST con respuestas JSON estructuradas para consumo por frontend y otros equipos
 - Formato de metricas de theta decay y sensibilidad temporal para UI consolidada
 
----
+<!--
+  SECCION 13: Gaps
+  FUENTE: team-agent-bootstrap.md
+  PROPOSITO: 3 gaps pendientes de coordinar con Riesgo Institucional y TEAM-01.
+  ESTADO: Los gaps NO bloquean la funcionalidad actual, solo la afinacion para produccion.
+-->
 
 ## 13. Gaps y Decisiones Pendientes (desde team-agent-bootstrap.md)
 
 | Gap | Descripcion | Estado |
 |-----|-------------|--------|
-| G-T09-01 | Definir supuestos de modelado de curva temporal e IV term structure por mercado | Pendiente |
+| G-T09-01 | Definir supuestos de modelado de curva temporal e IV term structure por mercado | Pendiente (parcialmente mitigado por T205 forward IV estimator) |
 | G-T09-02 | Validar reglas de roll (calendario, triggers, costos) con politica de riesgo institucional | Pendiente |
 | G-T09-03 | Acordar formato de metricas de theta decay y sensibilidad temporal para UI consolidada | Pendiente |
 

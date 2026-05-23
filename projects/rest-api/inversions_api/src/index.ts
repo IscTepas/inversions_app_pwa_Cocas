@@ -1,5 +1,7 @@
 import "dotenv/config";
 import express from "express";
+import path from "path";
+import swaggerUi from "swagger-ui-express";
 import { initializeEnvironment } from "./config/environment";
 import { printValidationResult, validateEnvironment } from "./config/envValidator";
 import { createAuditHistoryRouter } from "./routes/audit/history";
@@ -20,9 +22,16 @@ import { instrumentsCatalogRouter } from "./routes/catalogs/instruments";
 import { brokerCapabilitiesRouter } from "./routes/brokers/capabilities";
 import { marketDataOhlcRouter } from "./routes/market-data/ohlc";
 import { indicatorsCatalogRouter } from "./routes/indicators/catalog";
+/**
+ * Importaciones de rutas TEAM-09 (T168)
+ * calendarSpreadRouter  -> POST /api/v1/strategies/term/calendar   (linea 63)
+ * diagonalSpreadRouter  -> POST /api/v1/strategies/term/diagonal   (linea 64)
+ * termComparatorRouter  -> POST /api/v1/strategies/term/compare    (linea 65)
+ */
 import { calendarSpreadRouter } from "./routes/strategies/term/calendarSpread";
 import { diagonalSpreadRouter } from "./routes/strategies/term/diagonalSpread";
 import { termComparatorRouter } from "./routes/strategies/term/termComparator";
+import { swaggerSpec } from "./swagger";
 
 const envValidation = validateEnvironment();
 if (!envValidation.isValid) {
@@ -58,9 +67,18 @@ app.use("/api/catalogs", instrumentsCatalogRouter);
 app.use("/api/brokers", brokerCapabilitiesRouter);
 app.use("/api/market-data", marketDataOhlcRouter);
 app.use("/api/indicators", indicatorsCatalogRouter);
+/**
+ * Rutas TEAM-09 — Estrategias temporales Calendar/Diagonal Spread
+ * Endpoints expuestos:
+ *   POST /api/v1/strategies/term/calendar  -> CalendarSpreadEngine + simulacion + reporte
+ *   POST /api/v1/strategies/term/diagonal   -> DiagonalSpreadEngine + simulacion + reporte
+ *   POST /api/v1/strategies/term/compare    -> Comparador Calendar vs Diagonal
+ */
 app.use("/api/v1/strategies/term", calendarSpreadRouter);
 app.use("/api/v1/strategies/term", diagonalSpreadRouter);
 app.use("/api/v1/strategies/term", termComparatorRouter);
+
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
@@ -69,6 +87,9 @@ app.get("/health", (_req, res) => {
 app.get("/api/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
 });
+
+// Serve PWA frontend static files for easy testing (alternative to Vite dev server)
+app.use(express.static(path.join(__dirname, "../../../pwa/inversions_app/public")));
 
 const port = Number(process.env.PORT ?? 3000);
 

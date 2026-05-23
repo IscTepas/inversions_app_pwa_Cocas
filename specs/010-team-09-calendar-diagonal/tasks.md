@@ -1,6 +1,18 @@
 # Backlog Operativo Speckit: Calendar Spread & Diagonal Spread
 ## TEAM-09 — SquadISC
 
+<!--
+  ARCHIVO: tasks.md — Backlog Operativo Speckit para TEAM-09
+  GENERADO POR: speckit.tasks (via /diana.integrate)
+  CANON DE ENTRADA: teams/TEAM-09/tasks.md (Diana)
+  PLAN VIGENTE: specs/010-team-09-calendar-diagonal/plan.md
+  SPEC VIGENTE: specs/010-team-09-calendar-diagonal/spec.md
+  PROPOSITO: Backlog detallado con 18 tareas (T162-T169 + T177 + T196-T203 + S-T09-C01),
+  85 sub-tareas operativas, organizadas en 4 oleadas con dependencias y criterios de aceptacion.
+  CONSUMIDO POR: TEAM-09 (guia implementacion diaria), speckit.implement (validacion),
+                  speckit.git.commit (trazabilidad de commits)
+  ESTADO: Sub-tareas con [X] = implementadas; [ ] = pendientes (T204-T206 son adiciones v3).
+-->
 **Proyecto**: diana-inversions
 **Iniciativa**: 001-inversions
 **Equipo**: TEAM-09 (SquadISC)
@@ -22,7 +34,7 @@
 
 1. **Diana es la fuente de verdad** para IDs canonicos y alcance funcional.
 2. **Speckit NO omite** contenido canonico ya validado — solo optimiza, expande o mergea.
-3. **Trazabilidad 1:1** — cada tarea canonica T162-T169, T177, T196-T198 se preserva con su ID original y se expande con detalle Speckit.
+3. **Trazabilidad 1:1** — cada tarea canonica T162-T169, T177, T196-T203 se preserva con su ID original y se expande con detalle Speckit.
 4. **Grafo de dependencias obligatorio** — las tareas deben ejecutarse en las oleadas definidas en `plan.md` seccion 6.
 5. **Cobertura minima de tests**: 80% en rutas criticas (logica de negocio, contratos de API, flujos de error).
 6. **Los IDs canonicos son la unica llave de sincronizacion** entre Diana y Speckit.
@@ -31,7 +43,17 @@
 
 ## 2. Backlog Operativo Detallado
 
----
+<!--
+  SECCION 2: Backlog Operativo Detallado
+  Organizado en 4 oleadas secuenciales. Cada tarea contiene:
+  - ID Canonico (T162-T203 o S-T09-C01)
+  - Ruta del modulo fisico
+  - Dependencias de otras tareas
+  - Sub-tareas operativas con estado [X] o [ ]
+  - Criterios de aceptacion
+  Las sub-tareas [X] fueron verificadas por speckit.implement.
+  Las sub-tareas [ ] (T199-T203) son gaps de calidad pendientes.
+-->
 
 ### OLA 1: Fundacion (dependencias: raiz)
 *Objetivo: Establecer contratos base y motores de estrategia puros.*
@@ -168,6 +190,36 @@ Implementar core de Diagonal Spread (call/put) en `projects/rest-api/inversions_
 - Calcula sensibilidad de griegas (delta, gamma, theta, vega)
 - Genera perfiles de riesgo por escenario de precio y tiempo
 - Identifica ventanas de ajuste/roll
+
+---
+
+#### T200 — Validacion de Fechas en Contrato Base (NUEVA)
+
+| Atributo | Valor |
+|----------|-------|
+| **ID Canonico** | T200 |
+| **Modulo** | `projects/rest-api/inversions_api/src/modules/strategies/term/termStrategyContract.ts` |
+| **Fase Canonica** | T09-1: Modelado temporal |
+| **Ola Speckit** | Ola 1 — Fundacion |
+| **Dependencias** | T162 completado |
+| **Estimacion** | 0.5 unidades de desarrollo |
+| **Habilitador de** | Calidad de datos en T163, T164 |
+| **Prioridad** | Alta |
+
+**Descripcion:**
+Agregar validacion de formato de fecha y expiracion en pasado al contrato base `termStrategyContract.ts`. Actualmente `new Date("invalido")` produce `Invalid Date` que propaga `NaN` silenciosamente a todos los calculos de los motores.
+
+**Sub-tareas operativas Speckit:**
+
+- [X] T200.1 Agregar validacion de `Invalid Date`:
+- [X] T200.2 Agregar validacion de expiracion en pasado:
+- [X] T200.3 Agregar metodos estaticos en `TermStrategyError` para los nuevos errores
+- [X] T200.4 Escribir tests unitarios para las nuevas validaciones
+
+**Criterios de aceptacion:**
+- Rechaza `Invalid Date` con error descriptivo
+- Rechaza fechas de expiracion en pasado
+- Tests unitarios para ambas validaciones
 
 ---
 
@@ -409,6 +461,69 @@ Implementar APIs dedicadas y comparador Calendar vs Diagonal en `projects/rest-a
 
 ---
 
+#### T199 — Documentacion OpenAPI/Swagger para Endpoints Term (NUEVA)
+
+| Atributo | Valor |
+|----------|-------|
+| **ID Canonico** | T199 |
+| **Modulos** | `projects/rest-api/inversions_api/src/routes/strategies/term/calendarSpread.ts`, `projects/rest-api/inversions_api/src/routes/strategies/term/diagonalSpread.ts`, `projects/rest-api/inversions_api/src/routes/strategies/term/termComparator.ts` |
+| **Fase Canonica** | T09-3: Chat IA y API |
+| **Ola Speckit** | Ola 3 — Orquestacion y Exposicion |
+| **Dependencias** | T168 completado |
+| **Estimacion** | 1 unidad de desarrollo |
+| **Habilitador de** | Integracion con TEAM-01 (G-T09-03) |
+| **Prioridad** | Alta |
+
+**Descripcion:**
+Agregar documentacion OpenAPI/Swagger a los 3 endpoints de estrategias temporales. La tarea T168.6 quedo marcada como completada pero nunca se implemento. Esto bloquea la integracion con TEAM-01 y el descubrimiento de APIs por otros equipos.
+
+**Sub-tareas operativas Speckit:**
+
+- [X] T199.1 Instalar dependencias swagger-jsdoc y swagger-ui-express
+- [X] T199.2 Agregar anotaciones JSDoc OpenAPI en:
+- [X] T199.3 Configurar ruta `/api/docs` en index.ts con swagger-ui-express
+- [X] T199.4 Definir esquemas de request/response en OpenAPI
+- [X] T199.5 Verificar que la documentacion sea accesible via navegador
+
+**Criterios de aceptacion:**
+- Endpoints documentados con OpenAPI JSDoc
+- Ruta `/api/docs` accesible via navegador
+- Esquemas request/response visibles en Swagger UI
+
+---
+
+#### T201 — Monte Carlo Default en APIs + term-verify.html (NUEVA)
+
+| Atributo | Valor |
+|----------|-------|
+| **ID Canonico** | T201 |
+| **Modulos** | `projects/rest-api/inversions_api/src/routes/strategies/term/calendarSpread.ts`, `projects/rest-api/inversions_api/src/routes/strategies/term/diagonalSpread.ts`, `projects/pwa/inversions_app/public/term-verify.html` |
+| **Fase Canonica** | T09-3: Chat IA y API |
+| **Ola Speckit** | Ola 3 — Orquestacion y Exposicion |
+| **Dependencias** | T165, T168 completados |
+| **Estimacion** | 0.5 unidades de desarrollo |
+| **Habilitador de** | Verificacion visual de Monte Carlo |
+| **Prioridad** | Media |
+
+**Descripcion:**
+El motor Monte Carlo esta completamente implementado en `termSimulationEngine.ts` pero las APIs nunca lo ejecutan porque requieren `body.monteCarlo` explicito. Cambiar para que por defecto ejecute 1000 iteraciones con distribucion normal. Ademas, actualizar `term-verify.html` para mostrar resultados de Monte Carlo y agregar controles basicos.
+
+**Sub-tareas operativas Speckit:**
+
+- [X] T201.1 Modificar `calendarSpread.ts` para ejecutar Monte Carlo por defecto (1000 iteraciones, normal)
+- [X] T201.2 Modificar `diagonalSpread.ts` para ejecutar Monte Carlo por defecto (1000 iteraciones, normal)
+- [X] T201.3 Actualizar `term-verify.html`:
+  - Agregar seccion de resultados Monte Carlo en panels Calendar y Diagonal
+  - Agregar controles basicos (toggle, iteraciones, distribucion)
+  - Manejar NaN en funcion `fmt()`
+
+**Criterios de aceptacion:**
+- Monte Carlo se ejecuta por defecto sin configuracion explicita
+- Resultados visibles en term-verify.html
+- NaN manejado correctamente en UI
+
+---
+
 #### S-T09-C01 — Chat IA Explicativo (SPECKIT EXPANSION — nuevo)
 
 | Atributo | Valor |
@@ -563,6 +678,267 @@ Ejecutar ajuste de TEAM-09 al estandar transversal en `projects/rest-api/inversi
 
 ---
 
+#### T202 — Cobertura Tests termChatAssistant ≥80% (NUEVA)
+
+| Atributo | Valor |
+|----------|-------|
+| **ID Canonico** | T202 |
+| **Tipo** | Unitario |
+| **Modulos bajo prueba** | `termChatAssistant.ts` |
+| **Archivo destino** | `tests/unit/strategies/term/termChatAssistant.test.ts` |
+| **Ola Speckit** | Ola 4 — Calidad y Cierre |
+| **Dependencias** | S-T09-C01 completado |
+| **Estimacion** | 0.5 unidades de desarrollo |
+| **Prioridad** | Media (RNF-006) |
+
+**Descripcion:**
+La cobertura actual de `termChatAssistant.ts` es 54.41% sentencias / 39.58% ramas, muy por debajo del 80% requerido por RNF-006. Agregar tests para los metodos no cubiertos: `buildPurpose`, `buildRiskProfile`, `buildUsageConditions`, `buildScenarioSummary`, `extractMetrics`.
+
+**Sub-tareas operativas Speckit:**
+
+- [X] T202.1 Test: `buildPurpose` — genera proposito para calendar y diagonal
+- [X] T202.2 Test: `buildRiskProfile` — genera perfil de riesgo con metricas
+- [X] T202.3 Test: `buildUsageConditions` — genera condiciones de uso segun contexto
+- [X] T202.4 Test: `buildScenarioSummary` — genera resumen de escenarios
+- [X] T202.5 Test: `extractMetrics` — extrae metricas clave del resultado
+- [X] T202.6 Test: Casos borde — datos nulos, parciales, extremos
+
+**Cobertura minima requerida**: 80% sentencias, 80% ramas
+
+---
+
+#### T203 — Cobertura Tests termReportEngine branch ≥80% (NUEVA)
+
+| Atributo | Valor |
+|----------|-------|
+| **ID Canonico** | T203 |
+| **Tipo** | Unitario |
+| **Modulos bajo prueba** | `termReportEngine.ts` |
+| **Archivo destino** | `tests/unit/strategies/term/termReportEngine.test.ts` |
+| **Ola Speckit** | Ola 4 — Calidad y Cierre |
+| **Dependencias** | T167 completado |
+| **Estimacion** | 0.5 unidades de desarrollo |
+| **Prioridad** | Media (RNF-006) |
+
+**Descripcion:**
+La cobertura de ramas de `termReportEngine.ts` es 52.77%, por debajo del 80% requerido por RNF-006. Agregar tests para cubrir ramas faltantes en `generateSurface`, `calculateRiskMetrics`, `estimateProbabilityOfProfit`.
+
+**Sub-tareas operativas Speckit:**
+
+- [X] T203.1 Test: `generateSurface` con datos parciales (solo diagonal, sin calendar)
+- [X] T203.2 Test: `generateSurface` con datos nulos en escenarios
+- [X] T203.3 Test: `calculateRiskMetrics` con datos extremos (alta volatilidad, P&L grande)
+- [X] T203.4 Test: `estimateProbabilityOfProfit` con distintos percentiles de escenarios
+- [X] T203.5 Test: `generateReport` para diagonal spread
+- [X] T203.6 Test: Casos borde — datos minimos, escenarios vacios
+
+**Cobertura minima requerida**: 80% ramas
+
+---
+
+#### T204 — Stress Tests en Engines (NUEVA v3)
+
+| Atributo | Valor |
+|----------|-------|
+| **ID Canonico** | T204 |
+| **Modulos** | `projects/rest-api/inversions_api/src/modules/strategies/term/calendarSpreadEngine.ts`, `projects/rest-api/inversions_api/src/modules/strategies/term/diagonalSpreadEngine.ts` |
+| **Fase Canonica** | T09-5: Features extendidas |
+| **Ola Speckit** | Ola 5 — Features extendidas |
+| **Dependencias** | T163, T164 completados |
+| **Estimacion** | 1 unidad de desarrollo |
+| **Habilitador de** | T206 (report extendido) |
+| **Prioridad** | Media |
+
+**Descripcion:**
+Implementar generacion de 5 escenarios de stress test predefinidos en ambos engines (calendarSpreadEngine y diagonalSpreadEngine) para evaluar comportamiento de las estrategias en condiciones extremas de mercado.
+
+**Sub-tareas operativas Speckit:**
+
+- [X] T204.1 Implementar `CalendarStressTest` interface y campo `stressTests` en `calendarSpreadEngine.ts`
+- [X] T204.2 Implementar `generateStressTests()` en CalendarSpreadEngine con 5 escenarios:
+  - Market Crash (underlying -20%)
+  - Sharp Rally (underlying +20%)
+  - IV Expansion (IV +50%)
+  - IV Contraction (IV -50%)
+  - Volatility Spike (IV +100%)
+- [X] T204.3 Implementar `DiagonalStressTest` interface y campo `stressTests` en `diagonalSpreadEngine.ts`
+- [X] T204.4 Implementar `generateStressTests()` en DiagonalSpreadEngine con los mismos 5 escenarios + griegas (delta, gamma, theta, vega) por escenario
+- [X] T204.5 Tests unitarios para stress tests en CalendarSpreadEngine
+- [X] T204.6 Tests unitarios para stress tests en DiagonalSpreadEngine
+
+**Criterios de aceptacion:**
+- 5 escenarios de stress generados en cada engine
+- Cada escenario incluye label, descripcion, precio, P&L, cambios en IV
+- DiagonalSpreadEngine incluye griegas por escenario
+- Tests unitarios para ambos engines
+
+---
+
+#### T205 — Forward IV Estimator (NUEVA v3)
+
+| Atributo | Valor |
+|----------|-------|
+| **ID Canonico** | T205 |
+| **Modulo** | `projects/rest-api/inversions_api/src/modules/strategies/term/termUtils.ts` |
+| **Fase Canonica** | T09-5: Features extendidas |
+| **Ola Speckit** | Ola 5 — Features extendidas |
+| **Dependencias** | Ninguna (utilidad matematica pura) |
+| **Estimacion** | 0.5 unidades de desarrollo |
+| **Habilitador de** | T206 (report extendido), pricing preciso en T163/T164 |
+| **Prioridad** | Media |
+
+**Descripcion:**
+Implementar funcion `estimateForwardIv()` que calcula la volatilidad forward implicita entre dos tenores, mejorando el pricing de la pata larga cuando se provee una curva IV. Utiliza la formula canonica: `sqrt((IV₂²·T₂ − IV₁²·T₁) / (T₂−T₁))`.
+
+**Sub-tareas operativas Speckit:**
+
+- [X] T205.1 Implementar `estimateForwardIv(ivShort: number, ivLong: number, timeShort: number, timeLong: number): number`
+- [X] T205.2 Implementar manejo de casos borde: tenores iguales, IV nula, numerador negativo
+- [X] T205.3 Implementar fallback conservador cuando la formula produce backwardation extrema (retorna `max(ivShort, ivLong) * 0.9`)
+- [X] T205.4 Tests unitarios para forward IV estimator (casos normales, borde, extremos)
+
+**Criterios de aceptacion:**
+- Calculo correcto de IV forward en casos normales
+- Fallback para backwardation extrema
+- Output siempre positivo y acotado
+- Tests unitarios ≥80% cobertura
+
+---
+
+#### T206 — Report Extendido con Probability Cone y CVaR (NUEVA v3)
+
+| Atributo | Valor |
+|----------|-------|
+| **ID Canonico** | T206 |
+| **Modulo** | `projects/rest-api/inversions_api/src/modules/strategies/term/termReportEngine.ts` |
+| **Fase Canonica** | T09-5: Features extendidas |
+| **Ola Speckit** | Ola 5 — Features extendidas |
+| **Dependencias** | T165, T167, T204, T205 completados |
+| **Estimacion** | 1 unidad de desarrollo |
+| **Habilitador de** | RF-009, UI extendida en term-verify.html |
+| **Prioridad** | Media |
+
+**Descripcion:**
+Extender el report engine para incluir probability cone, stress test summary y metricas CVaR/expected shortfall en el StructuredReport. Reflejar las nuevas features en term-verify.html.
+
+**Sub-tareas operativas Speckit:**
+
+- [X] T206.1 Extender `StructuredReport` con field `stressTests: StressTestEntry[]`
+- [X] T206.2 Extender `StructuredReport` con field `probabilityCone: ProbabilityConePoint[]`
+- [X] T206.3 Extender `RiskMetrics` con `stressTestMaxLoss`, `stressTestMaxGain`, `expectedShortfall` (CVaR)
+- [X] T206.4 Implementar `generateStressTestSummary()` que consume stress tests de ambos engines
+- [X] T206.5 Implementar `generateProbabilityCone()` con percentiles 5/25/50/75/95
+- [X] T206.6 Implementar `estimateExpectedShortfall()` para CVaR al 95%
+- [X] T206.7 Tests unitarios para nuevas funciones del report engine
+- [X] T206.8 Actualizar term-verify.html para mostrar stress tests, probability cone y metricas extendidas
+
+**Criterios de aceptacion:**
+- StructuredReport incluye stressTests y probabilityCone
+- RiskMetrics incluye stressTestMaxLoss, stressTestMaxGain, expectedShortfall
+- CVaR calculado correctamente al 95%
+- UI actualizada en term-verify.html
+
+---
+
+#### T207 — Griegas Completas Calendar (NUEVA v4)
+
+| Atributo | Valor |
+|----------|-------|
+| **ID Canonico** | T207 |
+| **Modulo** | `projects/rest-api/inversions_api/src/modules/strategies/term/calendarSpreadEngine.ts` |
+| **Fase Canonica** | T09-6: Enriquecimiento comparativo |
+| **Ola Speckit** | Ola 6 — Enriquecimiento |
+| **Dependencias** | T163 completado |
+| **Estimacion** | 0.5 unidades de desarrollo |
+| **Habilitador de** | T208 (comparador con griegas completas) |
+| **Prioridad** | Media |
+
+**Descripcion:**
+Agregar delta, gamma y vega al resultado de CalendarSpreadEngine para tener paridad de griegas con DiagonalSpreadEngine. Esto permite al comparador side-by-side mostrar las 4 griegas para ambas estrategias.
+
+**Sub-tareas operativas Speckit:**
+
+- [X] T207.1 Agregar interfaz `GreekSensitivities` con delta, gamma, theta, vega en calendarSpreadEngine.ts
+- [X] T207.2 Agregar campo `greeks: GreekSensitivities` a `CalendarSpreadResult`
+- [X] T207.3 Calcular delta, gamma, vega via Black-Scholes en el metodo analyze()
+- [X] T207.4 Actualizar tests (mocks de CalendarSpreadResult necesitan campo greeks)
+- [X] T207.5 Actualizar termReportEngine.calculateRiskMetrics() para consumir las nuevas griegas
+
+**Criterios de aceptacion:**
+- CalendarSpreadResult incluye greeks con delta, gamma, theta, vega
+- Tests pasan con el nuevo campo requerido
+- riskMetrics en termReportEngine usa las griegas reales
+
+---
+
+#### T208 — Comparador Side-by-Side 3 Bloques (NUEVA v4)
+
+| Atributo | Valor |
+|----------|-------|
+| **ID Canonico** | T208 |
+| **Modulos** | `projects/rest-api/inversions_api/src/routes/strategies/term/termComparator.ts`, `projects/pwa/inversions_app/public/term-verify.html` |
+| **Fase Canonica** | T09-6: Enriquecimiento comparativo |
+| **Ola Speckit** | Ola 6 — Enriquecimiento |
+| **Dependencias** | T207, T209 completados |
+| **Estimacion** | 1 unidad de desarrollo |
+| **Habilitador de** | RF-009 en UI de comparacion |
+| **Prioridad** | Media |
+
+**Descripcion:**
+Expandir el endpoint /compare y su UI en term-verify.html para mostrar 3 bloques side-by-side: Capital & Risk (cost, maxLoss, maxProfit, breakEvens, POP), Greeks Exposure (delta, gamma, theta, vega), y DTE (short, long). Incluir scoring numerico y justificacion textual.
+
+**Sub-tareas operativas Speckit:**
+
+- [X] T208.1 Definir `StrategyMetrics` interface en termComparator.ts con cost, maxLoss, maxProfit, breakEvens, greeks, dte, directionalProfile, riskMetrics
+- [X] T208.2 Definir `CompareResponse` con recommendation, justification, scores, calendar: StrategyMetrics, diagonal: StrategyMetrics
+- [X] T208.3 Implementar buildStrategyMetrics() que construye metrics desde engine result + report engine
+- [X] T208.4 Ejecutar Monte Carlo + deterministic scenarios + report engine dentro del comparator para enriquecer datos
+- [X] T208.5 Actualizar term-verify.html: reemplazar las 5 metricas planas con tabla side-by-side de 3 bloques
+- [X] T208.6 Integrar helpers calculateBreakEvens y calculateNetCost en el flujo
+- [X] T208.7 Agregar campo underlyingPrice en CompareRequest y formulario frontend
+- [X] T208.8 Exponer ruta estatica para term-verify.html desde backend (express.static)
+
+**Criterios de aceptacion:**
+- POST /compare retorna calendar y diagonal con los 3 bloques completos
+- term-verify.html muestra tablas side-by-side con ganador resaltado
+- Scores y justificacion incluidos
+
+---
+
+#### T209 — Helpers Break-Even y Net Cost (NUEVA v4)
+
+| Atributo | Valor |
+|----------|-------|
+| **ID Canonico** | T209 |
+| **Modulo** | `projects/rest-api/inversions_api/src/modules/strategies/term/termReportEngine.ts` |
+| **Fase Canonica** | T09-6: Enriquecimiento comparativo |
+| **Ola Speckit** | Ola 6 — Enriquecimiento |
+| **Dependencias** | T167 completado |
+| **Estimacion** | 0.5 unidades de desarrollo |
+| **Habilitador de** | T208 (comparador usa break-evens y cost) |
+| **Prioridad** | Media |
+
+**Descripcion:**
+Agregar metodos estaticos calculateBreakEvens (encuentra precios donde P&L cruza cero desde una curva de payoff) y calculateNetCost (suma de premium*contracts) para uso en el comparador side-by-side.
+
+**Sub-tareas operativas Speckit:**
+
+- [X] T209.1 Implementar calculateBreakEvens(curve: PayoffCurvePoint[]): number[] con interpolacion lineal entre pares consecutivos donde pnl cambia de signo
+- [X] T209.2 Implementar calculateNetCost(legs): number como reduce de premium*contracts
+- [X] T209.3 Manejar casos borde: curva < 2 puntos, sin cruce por cero
+- [X] T209.4 Tests unitarios para generatePayoffAtExpiration: casos normales, borde, multi-contrato, puts
+
+**Criterios de aceptacion:**
+- calculateBreakEvens retorna precios break-even correctos
+- calculateNetCost retorna debito/credito neto correcto
+- Casos borde manejados
+
+<!--
+  SECCION 3: Resumen de Tareas
+  Tabla consolidada con las 21 tareas, su modulo, ola, dependencias, estimacion y prioridad.
+  Total: 24 unidades de desarrollo distribuidas en 5 oleadas.
+-->
+
 ## 3. Resumen de Tareas
 
 | ID | Modulo | Ola | Dependencias | Estimacion | Prioridad |
@@ -570,23 +946,41 @@ Ejecutar ajuste de TEAM-09 al estandar transversal en `projects/rest-api/inversi
 | **T162** | termStrategyContract.ts | 1 | — | 1 | Critica |
 | **T163** | calendarSpreadEngine.ts | 1 | T162 | 2 | Alta |
 | **T164** | diagonalSpreadEngine.ts | 1 | T162 | 2 | Alta |
+| **T200** | termStrategyContract.ts (validacion fechas) | 1 | T162 | 0.5 | Alta |
 | **T165** | termSimulationEngine.ts | 2 | T163, T164 | 2 | Alta |
 | **T166** | termRiskEngine.ts | 2 | T165 | 1.5 | Alta |
 | **T169** | termRollOrchestrator.ts | 3 | T166 | 1.5 | Media |
 | **T167** | termReportEngine.ts | 3 | T165 | 1.5 | Media |
 | **T168** | APIs (3 endpoints) | 3 | T163, T164, T165, T167 | 2 | Alta |
+| **T199** | OpenAPI/Swagger | 3 | T168 | 1 | Alta |
+| **T201** | Monte Carlo default + UI | 3 | T165, T168 | 0.5 | Media |
 | **S-T09-C01** | termChatAssistant.ts | 3 | T163, T164, T165 | 2 | Media |
 | **T196** | Tests calendar/diagonal engines | 4 | T163, T164 | 1 | Alta |
 | **T197** | Tests simulacion/orquestador | 4 | T165, T169 | 1 | Alta |
 | **T198** | Tests integracion routes | 4 | T168 | 1 | Alta |
-| **T177** | Estandarizacion transversal | 4 | T162-T169, S-T09-C01 | 0.5 | Media |
+| **T202** | Tests chat assistant coverage | 4 | S-T09-C01 | 0.5 | Media |
+| **T203** | Tests report engine branch | 4 | T167 | 0.5 | Media |
+| **T204** | Stress tests en engines | 5 | T163, T164 | 1 | Media |
+| **T205** | Forward IV estimator | 5 | — | 0.5 | Media |
+| **T206** | Report extendido (probability cone, CVaR) | 5 | T165, T167, T204, T205 | 1 | Media |
+| **T207** | Griegas completas Calendar (delta, gamma, vega) | 6 | T163 | 0.5 | Media |
+| **T208** | Comparador side-by-side 3 bloques | 6 | T207, T209 | 1 | Media |
+| **T209** | Helpers break-even y net cost | 6 | T167 | 0.5 | Media |
+| **T177** | Estandarizacion transversal | 4 | T162-T169, S-T09-C01, T199-T209 | 0.5 | Media |
 
----
+<!--
+  SECCION 4: Grafo de Dependencias
+  Fuente: plan.md seccion 6 (preservado)
+  Arbol completo de dependencias entre tareas, con la secuencia recomendada
+  de implementacion por oleadas.
+-->
 
 ## 4. Grafo de Dependencias (desde plan.md seccion 6)
 
 ```
 T162 (termStrategyContract)
+  ├──> T200 (validacion fechas) ← desde T162
+  │
   ├──> T163 (calendarSpreadEngine)
   ├──> T164 (diagonalSpreadEngine)
   │
@@ -594,23 +988,41 @@ T162 (termStrategyContract)
   │     ├──> T166 (termRiskEngine)
   │     │     └──> T169 (termRollOrchestrator)
   │     └──> T167 (termReportEngine)
+  │           └──> T203 (tests report engine)
   │
   ├──> T168 (APIs + Comparator) ← depende de T163, T164, T165, T167
+  │     ├──> T199 (OpenAPI/Swagger) ← desde T168
+  │     └──> T201 (Monte Carlo default) ← desde T165
+  │
+  ├──> T204 (stress tests) ← desde T163, T164
+  │     └──> T206 (report extendido) ← desde T204 + T205
+  │
+  ├──> T205 (forward IV estimator) ← utilidad compartida
+  │     └──> T206 (report extendido)
+  │
   ├──> S-T09-C01 (Chat IA) ← depende de T163, T164, T165
+  │     └──> T202 (tests chat assistant) ← desde S-T09-C01
   │
   └──> T196 (tests unitarios engines) ← depende de T163, T164
   └──> T197 (tests unitarios simulacion) ← depende de T165, T169
   └──> T198 (tests integracion routes) ← depende de T168
   └──> T177 (estandarizacion transversal) ← depende de todo
-```
 
 **Secuencia recomendada de implementacion:**
-1. **Ola 1**: T162 → T163 + T164 (fundacion)
+1. **Ola 1**: T162 → T163 + T164 + T200 (fundacion + validacion fechas)
 2. **Ola 2**: T165 → T166 + T169 (simulacion y riesgo)
-3. **Ola 3**: T167 + T168 + S-T09-C01 (reportes, APIs y Chat IA)
-4. **Ola 4**: T196 + T197 + T198 + T177 (calidad y cierre)
+3. **Ola 3**: T167 + T168 + T199 + T201 + S-T09-C01 (reportes, APIs, Swagger, Monte Carlo, Chat IA)
+4. **Ola 4**: T196 + T197 + T198 + T202 + T203 + T177 (calidad y cierre)
+5. **Ola 5**: T204 + T205 → T206 (features extendidas: stress tests, forward IV, report extendido)
+```
 
----
+<!--
+  SECCION 5-8: Skills, Contratos, Gaps y Cobertura Canonica
+  FUENTE: plan.md + spec.md + team-agent-bootstrap.md
+  PROPOSITO: Verifica skills disponibles, enumera contratos de integracion,
+  documenta gaps pendientes, y reporta cobertura canonica vs Diana.
+  RESULTADO: SIN GAPS. 21 preserved + 12 expanded + 1 merged + 5 added + 0 dropped.
+-->
 
 ## 5. Required Skills para speckit.tasks
 
@@ -668,6 +1080,14 @@ T162 (termStrategyContract)
 | **T196** | Tests unitarios calendar/diagonal engines | Seccion T196 — preservado con 7 sub-tareas operativas | **expanded** |
 | **T197** | Tests unitarios simulacion y orquestador | Seccion T197 — preservado con 8 sub-tareas operativas | **expanded** |
 | **T198** | Tests de integracion para routes | Seccion T198 — preservado con 7 sub-tareas operativas | **expanded** |
+| **T199** | Documentacion OpenAPI/Swagger | Seccion T199 — nueva tarea con 5 sub-tareas operativas | **added (v2)** |
+| **T200** | Validacion de fechas en contrato base | Seccion T200 — nueva tarea con 4 sub-tareas operativas | **added (v2)** |
+| **T201** | Monte Carlo default en APIs + UI | Seccion T201 — nueva tarea con 3 sub-tareas operativas | **added (v2)** |
+| **T202** | Cobertura tests termChatAssistant ≥80% | Seccion T202 — nueva tarea con 6 sub-tareas operativas | **added (v2)** |
+| **T203** | Cobertura tests termReportEngine branch ≥80% | Seccion T203 — nueva tarea con 6 sub-tareas operativas | **added (v2)** |
+| **T204** | Stress tests en engines | Seccion T204 — nueva tarea con 6 sub-tareas operativas | **added (v3)** |
+| **T205** | Forward IV estimator | Seccion T205 — nueva tarea con 4 sub-tareas operativas | **added (v3)** |
+| **T206** | Report extendido (probability cone, CVaR) | Seccion T206 — nueva tarea con 8 sub-tareas operativas | **added (v3)** |
 
 ### Fuente: `specs/010-team-09-calendar-diagonal/plan.md`
 
@@ -688,17 +1108,23 @@ T162 (termStrategyContract)
 | 7. Riesgos | **preserved** | Reflejados en ACs de cada tarea |
 | 8. Criterios de Validacion | **preserved** | Reflejados en ACs por tarea |
 | 10. Gaps G-T09-01 a G-T09-03 | **preserved** | Reflejados en seccion 7 de este documento |
+| 5.17 Stress Tests (T204) | **preserved** | Expandido en T204 con sub-tareas y ACs |
+| 5.18 Forward IV Estimator (T205) | **preserved** | Expandido en T205 con sub-tareas y ACs |
+| 5.19 Report Extendido (T206) | **preserved** | Expandido en T206 con sub-tareas y ACs |
 
 ### Resumen de cobertura:
 
 | Categoria | Conteo | Detalle |
 |-----------|--------|---------|
-| **preserved** | 21 | 12 tareas canonicas mapeadas 1:1 + 9 secciones de plan.md preservadas |
+| **preserved** | 24 | 12 tareas canonicas mapeadas 1:1 + 12 secciones de plan.md preservadas |
 | **expanded** | 12 | Todas las tareas canonicas expandidas con sub-tareas operativas, ACs, dependencias |
 | **merged** | 1 | Chat IA (RF-004) mergeado como nueva tarea S-T09-C01 desde spec.md y plan.md |
+| **added (v2)** | 5 | Nuevas tareas T199-T203 para cubrir brechas de calidad detectadas en auditoria |
+| **added (v3)** | 3 | Nuevas tareas T204-T206 para features extendidas (stress tests, forward IV, report extendido) |
+| **added (v4)** | 3 | Nuevas tareas T207-T209 para enriquecimiento comparativo (griegas Calendar, comparador side-by-side, helpers break-even) |
 | **dropped** | 0 | Ningun contenido canonico omitido |
 
-**Resultado: SIN GAPS.** Todo el contenido canonico de `teams/TEAM-09/tasks.md`, `teams/TEAM-09/plan.md` y `specs/010-team-09-calendar-diagonal/plan.md` esta preservado, expandido o mergeado. No hay omisiones no justificadas.
+**Resultado: SIN GAPS.** Todo el contenido canonico de `teams/TEAM-09/tasks.md`, `teams/TEAM-09/plan.md` y `specs/010-team-09-calendar-diagonal/plan.md` esta preservado, expandido o mergeado. No hay omisiones no justificadas. Se agregaron 5 nuevas tareas Speckit (T199-T203) en v2 para brechas de calidad, 3 nuevas tareas (T204-T206) en v3 para features extendidas, y 3 nuevas tareas (T207-T209) en v4 para enriquecimiento comparativo.
 
 ---
 
@@ -707,13 +1133,21 @@ T162 (termStrategyContract)
 - [x] Backlog operativo generado con trazabilidad 1:1 al canon Diana
 - [x] Tareas canonicas T162-T169, T177, T196-T198 preservadas y expandidas
 - [x] Nueva tarea Speckit S-T09-C01 (Chat IA) creada desde RF-004
+- [x] 5 nuevas tareas T199-T203 agregadas (v2) para calidad y documentacion
+- [x] 3 nuevas tareas T204-T206 agregadas (v3) para features extendidas
+- [x] 3 nuevas tareas T207-T209 agregadas (v4) para enriquecimiento comparativo
 - [x] Grafo de dependencias y oleadas definido
 - [x] Required skills verificadas sin gaps
-- [x] Cobertura canonica validada (preserved: 21, expanded: 12, merged: 1, dropped: 0)
+- [x] Cobertura canonica validada (preserved: 24, expanded: 12, merged: 1, added v2: 5, added v3: 3, added v4: 3, dropped: 0)
 - [X] Pendiente: Ejecutar `/diana.integrate action="run" engine="speckit" run_only="implement"` para iniciar implementacion Speckit
-- [ ] Pendiente: Resolver G-T09-01 antes de Ola 1
-- [ ] Pendiente: Resolver G-T09-02 antes de T169
-- [ ] Pendiente: Resolver G-T09-03 antes de T167/T168
+- [ ] (gap externo) G-T09-01: Definir supuestos de modelado de curva temporal e IV term structure por mercado — requiere coordinacion con Riesgo Institucional
+- [ ] (gap externo) G-T09-02: Validar reglas de roll (calendario, triggers, costos) con politica de riesgo institucional — requiere coordinacion con Riesgo Institucional
+- [ ] (gap externo) G-T09-03: Acordar formato de metricas de theta decay y sensibilidad temporal para UI consolidada — requiere coordinacion con TEAM-01
+
+---
+**Nota**: Las tareas T199-T203 fueron identificadas durante auditoria de calidad posterior a la implementacion inicial. No estan en el canon Diana original porque son expansiones Speckit para cubrir brechas detectadas. La seccion de cobertura canonica las clasifica como **added (v2)**.
+
+Las tareas T204-T206 son adiciones v3 para features extendidas (stress tests, forward IV estimator, report extendido). Las tareas T207-T209 son adiciones v4 para enriquecimiento comparativo (griegas Calendar, comparador side-by-side, helpers break-even). Todas las sub-tareas de T199-T209 estan implementadas y verificadas.
 
 ---
 

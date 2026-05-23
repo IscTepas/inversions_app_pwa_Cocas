@@ -1,15 +1,27 @@
+/**
+ * termRollOrchestrator.ts — T169
+ * Proposito: Evalua si una posicion de estrategia temporal debe hacerse roll (renovacion)
+ * o cerrarse anticipadamente. Dispara reglas basadas en theta residual, exposicion gamma,
+ * DTE minimo, y violaciones de limites de riesgo.
+ * Llamado por: (no directamente por rutas — modulo de orquestacion interna,
+ *              disponible para integracion futura con orquestador global)
+ * Dependencias: termStrategyContract, termUtils, termRiskEngine (tipo RiskAnalysis)
+ */
 import { TermStrategyContract, type TermLeg } from "./termStrategyContract";
 import { blackScholesPrice, daysToExpiration } from "./termUtils";
 import type { RiskAnalysis } from "./termRiskEngine";
 
+/** Tipos de schedule para roll: calendar (dias fijos), trigger (solo por condiciones), hybrid (ambos) */
 export type RollTriggerType = "calendar" | "trigger" | "hybrid";
 
+/** Schedule de roll: tipo, array de dias antes de expiracion, y periodicidad opcional en dias */
 export interface RollSchedule {
   type: RollTriggerType;
   daysBeforeExpiration: number[];
   periodicDays?: number;
 }
 
+/** Resultado de evaluacion de triggers para roll: 4 condiciones booleanas + flag agregado + razones */
 export interface RollTriggerEvaluation {
   thetaResidualTriggered: boolean;
   gammaExposureTriggered: boolean;
@@ -19,6 +31,7 @@ export interface RollTriggerEvaluation {
   reasons: string[];
 }
 
+/** Costo estimado del roll: diferencial de prima, costo de transaccion, total, y riesgo post-roll */
 export interface RollCost {
   premiumDifferential: number;
   transactionCost: number;
@@ -27,6 +40,7 @@ export interface RollCost {
   postRollRiskTheta: number;
 }
 
+/** Recomendacion final de roll: flag roll, flag cierre temprano, triggers, costo, texto explicativo y timing */
 export interface RollRecommendation {
   shouldRoll: boolean;
   shouldCloseEarly: boolean;
@@ -45,6 +59,7 @@ export class TermRollOrchestrator {
   private readonly thetaResidualThreshold: number;
   private readonly minDteForRoll: number;
 
+  /** Construye el orquestador con contrato, analisis de riesgo, theta/gamma netos, schedule (default hybrid [7,3,1] c/5d), threshold theta (0.5) y DTE minimo (7) */
   constructor(
     contract: TermStrategyContract,
     riskAnalysis: RiskAnalysis | null,
@@ -69,6 +84,7 @@ export class TermRollOrchestrator {
     };
   }
 
+  /** Evalua si se debe hacer roll: ordena legs por expiracion, evalua triggers, calcula costo, construye recomendacion. Punto de entrada principal */
   evaluate(): RollRecommendation {
     const legs = this.contract.getLegs();
     const now = new Date();
@@ -107,6 +123,7 @@ export class TermRollOrchestrator {
     return { shouldRoll, shouldCloseEarly, triggers, cost, recommendation, timing };
   }
 
+  /** Evalua 4 triggers: theta residual bajo, gamma exposure alto, DTE minimo, violacion limites riesgo */
   private evaluateTriggers(shortDte: number): RollTriggerEvaluation {
     const reasons: string[] = [];
     const thetaResidualTriggered = Math.abs(this.netTheta) < this.thetaResidualThreshold;
@@ -129,6 +146,7 @@ export class TermRollOrchestrator {
     };
   }
 
+  /** Calcula costo estimado: diferencial prima entre short actual y nuevo short a 30d, mas 1% costo transaccion. Retorna null si DTE <= 0 */
   private calculateRollCost(
     shortLeg: TermLeg,
     longLeg: TermLeg,
@@ -158,6 +176,7 @@ export class TermRollOrchestrator {
     };
   }
 
+  /** Construye texto de recomendacion segun estado: cierre urgente si expiro o violacion, roll si triggers, "no roll needed" si todo ok */
   private buildRecommendation(
     triggers: RollTriggerEvaluation,
     shouldRoll: boolean,
@@ -187,6 +206,7 @@ export class TermRollOrchestrator {
     return `No roll needed. Short DTE: ${shortDte}, Theta residual: ${Math.abs(this.netTheta).toFixed(2)}.`;
   }
 
+  /** Sugiere timing humano segun DTE: <=0 "Immediate", <=3 "Today", <=7 "Within 2 days", <=14 "Within this week", sino en semanas */
   private suggestTiming(shortDte: number): string {
     if (shortDte <= 0) return "Immediate";
     if (shortDte <= 3) return "Today";
@@ -195,6 +215,7 @@ export class TermRollOrchestrator {
     return `In ${Math.floor(shortDte / 7)} weeks`;
   }
 
+  /** Retorna el contrato */
   getContract(): TermStrategyContract {
     return this.contract;
   }

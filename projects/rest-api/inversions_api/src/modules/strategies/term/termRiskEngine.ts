@@ -1,3 +1,12 @@
+/**
+ * termRiskEngine.ts — T166
+ * Proposito: Analisis de riesgo con limites por vencimiento/concentracion/theta,
+ * evaluacion de riesgo de asignacion temprana, reglas de stop-loss (fixed/percentage/trailing),
+ * y generacion de alertas push/email.
+ * Llamado por: TermRollOrchestrator (importa tipo RiskAnalysis),
+ *              (los endpoints de ruta lo usan indirectamente via termReportEngine)
+ * Dependencias: termStrategyContract, termUtils
+ */
 import { TermStrategyContract, type TermLeg } from "./termStrategyContract";
 import { blackScholesPrice, daysToExpiration } from "./termUtils";
 
@@ -40,11 +49,13 @@ export interface RiskAnalysis {
   thetaExposure: number;
 }
 
+/** Calcula la exposicion del portafolio como prima total / valor portafolio. Usado por TermRiskEngine.analyze() */
 export function calculatePortfolioExposure(legs: TermLeg[], portfolioValue: number): number {
   const totalPremium = legs.reduce((sum, leg) => sum + leg.premium * leg.contracts, 0);
   return portfolioValue > 0 ? totalPremium / portfolioValue : 0;
 }
 
+/** Estima max drawdown como |theta| * DTE. Usado por TermRiskEngine.evaluateStopLossRules() */
 export function calculateMaxDrawdownFromGreeks(theta: number, dte: number): number {
   if (dte <= 0) return 0;
   return Math.abs(theta) * dte;
@@ -55,6 +66,7 @@ export class TermRiskEngine {
   private readonly portfolioValue: number;
   private readonly riskLimits: RiskLimits;
 
+  /** Construye el Risk Engine con contrato, valor del portafolio (default 100k) y limites configurables (concentracion 10%, expiracion 1 ano, theta -10) */
   constructor(
     contract: TermStrategyContract,
     portfolioValue: number = 100000,
@@ -74,6 +86,7 @@ export class TermRiskEngine {
     };
   }
 
+  /** Analiza riesgos: limites de concentracion/expiracion/theta, riesgo de asignacion temprana, stop-loss, alertas. Llamado indirectamente por routes via report engine */
   analyze(
     netTheta: number,
     netGamma?: number
@@ -141,6 +154,7 @@ export class TermRiskEngine {
     };
   }
 
+  /** Evalua riesgo de asignacion temprana: detecta pata corta ITM profunda con DTE < 14 */
   private evaluateEarlyAssignmentRisk(): EarlyAssignmentRisk | null {
     const legs = this.contract.getLegs();
     const now = new Date();
@@ -181,6 +195,7 @@ export class TermRiskEngine {
     };
   }
 
+  /** Evalua 3 reglas de stop-loss: fixed (50% prima), percentage (20% capital), trailing (5x theta) */
   private evaluateStopLossRules(netTheta: number): StopLossRule[] {
     const legs = this.contract.getLegs();
     const totalPremiumPaid = legs.reduce((sum, leg) => sum + leg.premium * leg.contracts, 0);
@@ -219,6 +234,7 @@ export class TermRiskEngine {
     ];
   }
 
+  /** Retorna el contrato */
   getContract(): TermStrategyContract {
     return this.contract;
   }

@@ -1,8 +1,19 @@
+/**
+ * termChatAssistant.ts — S-T09-C01
+ * Proposito: Genera explicaciones en lenguaje natural sobre el proposito, riesgo y
+ * condiciones de uso de estrategias Calendar/Diagonal. NO autoriza ejecucion (RNF-001).
+ * Llamado por: (no directamente por rutas — disponible para integracion con Chat IA del frontend)
+ * Dependencias: calendarSpreadEngine (tipo CalendarSpreadResult),
+ *               diagonalSpreadEngine (tipo RiskProfile),
+ *               termSimulationEngine (tipo SimulationResult),
+ *               termRiskEngine (tipo RiskAnalysis)
+ */
 import type { CalendarSpreadResult } from "./calendarSpreadEngine";
 import type { RiskProfile } from "./diagonalSpreadEngine";
 import type { SimulationResult } from "./termSimulationEngine";
 import type { RiskAnalysis } from "./termRiskEngine";
 
+/** Contexto extraido de la estrategia para generar explicacion: tipo, strikes, DTE, griegas, perfil direccional */
 export interface ChatContext {
   strategyType: "calendar" | "diagonal";
   optionStyle: "call" | "put";
@@ -15,6 +26,7 @@ export interface ChatContext {
   directionalProfile: string;
 }
 
+/** Explicacion estructurada en lenguaje natural: proposito, perfil riesgo, condiciones, resumen escenarios, disclaimer */
 export interface ChatExplanation {
   purpose: string;
   riskProfile: string;
@@ -40,6 +52,7 @@ export class TermChatAssistant {
   private readonly simulationResult: SimulationResult | null;
   private readonly riskAnalysis: RiskAnalysis | null;
 
+  /** Recibe resultados de calendar, diagonal, simulacion y riesgo para generar explicaciones en lenguaje natural */
   constructor(
     calendarResult: CalendarSpreadResult | null,
     diagonalResult: RiskProfile | null,
@@ -52,6 +65,7 @@ export class TermChatAssistant {
     this.riskAnalysis = riskAnalysis;
   }
 
+  /** Extrae contexto de calendarResult o diagonalResult para alimentar las explicaciones */
   getContext(): ChatContext | null {
     if (this.calendarResult) {
       return {
@@ -84,6 +98,7 @@ export class TermChatAssistant {
     return null;
   }
 
+  /** Genera explicacion completa en lenguaje natural: proposito, riesgo, condiciones, escenarios, disclaimer. NO autoriza ejecucion (RNF-001). Punto de entrada principal */
   explain(): ChatExplanation {
     const ctx = this.getContext();
 
@@ -118,6 +133,7 @@ export class TermChatAssistant {
     };
   }
 
+  /** Construye descripcion del proposito segun tipo: calendar (neutral) o diagonal (direccional) */
   private buildPurpose(ctx: ChatContext): string {
     if (ctx.strategyType === "calendar") {
       return `Calendar Spread (${ctx.optionStyle.toUpperCase()}): ` +
@@ -134,6 +150,7 @@ export class TermChatAssistant {
       `The directional bias is ${ctx.directionalProfile}.`;
   }
 
+  /** Construye perfil de riesgo: theta, delta, violaciones de limites, riesgo asignacion temprana, perdida maxima */
   private buildRiskProfile(ctx: ChatContext): string {
     const parts: string[] = [
       `Net theta: ${ctx.netTheta.toFixed(2)} — ${ctx.netTheta < 0 ? "Negative theta means the position loses value over time (typical for net debit spreads)." : "Positive theta means the position gains value over time (typical for net credit spreads)."}`,
@@ -157,6 +174,7 @@ export class TermChatAssistant {
     return parts.join(". ");
   }
 
+  /** Construye condiciones de uso: entorno de volatilidad, direccion, ajustes, monitoreo */
   private buildUsageConditions(ctx: ChatContext): string {
     const conditions: string[] = [];
 
@@ -178,6 +196,7 @@ export class TermChatAssistant {
     return conditions.join(". ");
   }
 
+  /** Resumen de escenarios deterministicos y Monte Carlo: rango P&L, media, VaR 95% */
   private buildScenarioSummary(): string {
     if (!this.simulationResult) return "No simulation data available.";
 
@@ -201,12 +220,14 @@ export class TermChatAssistant {
     return parts.length > 0 ? parts.join(". ") : "No simulation data available.";
   }
 
+  /** Clasifica delta en bullish (>0.3), bearish (<-0.3) o neutral */
   private describeDelta(delta: number): string {
     if (delta > 0.3) return "Bullish bias — profits from upward price movement";
     if (delta < -0.3) return "Bearish bias — profits from downward price movement";
     return "Neutral bias — limited directional exposure";
   }
 
+  /** Extrae metricas clave del contexto para structuredOutput */
   private extractMetrics(ctx: ChatContext | null): Record<string, number | string> {
     if (!ctx) return {};
 

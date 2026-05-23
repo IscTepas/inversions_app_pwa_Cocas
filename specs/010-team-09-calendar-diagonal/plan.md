@@ -1,6 +1,15 @@
 # Plan Operativo Speckit: Calendar Spread & Diagonal Spread
 ## TEAM-09 — SquadISC
 
+<!--
+  ARCHIVO: plan.md — Plan Operativo Speckit para TEAM-09
+  GENERADO POR: speckit.plan (via /diana.integrate)
+  CANON DE ENTRADA: teams/TEAM-09/plan.md (Diana)
+  SPEC VIGENTE: specs/010-team-09-calendar-diagonal/spec.md
+  PROPOSITO: Define el plan de implementacion desglosado por modulo con dependencias,
+  estimaciones, criterios de aceptacion, riesgos y grafo de dependencias.
+  CONSUMIDO POR: speckit.tasks (genera backlog operativo), TEAM-09 (guia implementacion)
+-->
 **Proyecto**: diana-inversions
 **Iniciativa**: 001-inversions
 **Equipo**: TEAM-09 (SquadISC)
@@ -27,7 +36,11 @@ Este plan de equipo esta subordinado a:
 
 **Regla de autoridad**: Ante conflicto entre este plan operativo y el canon Diana (`teams/TEAM-09/plan.md`), prevalece el canon. Este plan expande, detalla y complementa, pero NO omite ni contradice el canon fuente.
 
----
+<!--
+  SECCION 2: Objetivo
+  FUENTE: Canon Diana preservado + Speckit expansion
+  PROPOSITO: Declara el objetivo general del feature y su descomposicion en 8 modulos.
+-->
 
 ## 2. Objetivo (desde canon Diana — preservado)
 
@@ -35,7 +48,15 @@ Implementar estrategias Calendar Spread y Diagonal Spread con explicabilidad, tr
 
 **Ampliacion Speckit**: El objetivo se descompone en 8 modulos de implementacion con entregables concretos, rutas de integracion y criterios de aceptacion por modulo, manteniendo trazabilidad 1:1 con las fases tecnicas del canon.
 
----
+<!--
+  SECCION 3: Fases Tecnicas
+  FUENTE: Canon Diana preservado y expandido
+  PROPOSITO: 4 fases (T09-1 a T09-4) que agrupan los modulos por orden logico.
+  T09-1: Fundacion (contratos + motores)
+  T09-2: Calculo y escenarios (simulacion + riesgo)
+  T09-3: Chat IA y API (exposicion)
+  T09-4: Validacion (tests + calidad)
+-->
 
 ## 3. Fases Tecnicas (desde canon Diana — preservado y expandido)
 
@@ -54,7 +75,22 @@ Implementar estrategias Calendar Spread y Diagonal Spread con explicabilidad, tr
 ### Fase T09-4: Validacion
 - Trazabilidad y readiness para Speckit.
 
----
+### Fase T09-5: Features extendidas
+- Stress tests en engines para escenarios extremos de mercado (crash, rally, IV expansion/contraction, volatility spike).
+- Forward IV estimator para pricing preciso de pata larga en Calendar/Diagonal Spread.
+- Probability cone y metricas extendidas (CVaR, stress P&L) en el reporte estructurado.
+
+### Fase T09-6: Enriquecimiento comparativo
+- Griegas completas (delta, gamma, vega) en CalendarSpreadEngine para paridad con Diagonal.
+- Helpers estáticos calculateBreakEvens y calculateNetCost en termReportEngine.
+- Comparador side-by-side con 3 bloques (Capital & Risk, Greeks Exposure, DTE).
+
+<!--
+  SECCION 4: Mapeo Fases -> Modulos Speckit
+  FUENTE: Speckit expansion
+  PROPOSITO: Tabla que conecta cada fase canonica con su modulo, archivo fisico y tarea.
+  Es el puente entre la vision Diana (fases) y la implementacion Speckit (modulos .ts).
+-->
 
 ## 4. Mapeo de Fases Canonicas a Modulos Speckit (Speckit expansion)
 
@@ -73,10 +109,27 @@ Cada fase canonica se materializa en uno o mas modulos de la arquitectura defini
 | **T09-3** Chat IA y API | `termComparator.ts` | Comparador Calendar vs Diagonal para recomendacion segun contexto | T168 |
 | **T09-3** Chat IA y API | `termChatAssistant.ts` | Integracion Chat IA explicativo | — |
 | **T09-3** Chat IA y API | `termReportEngine.ts` | Curvas de payoff, superficies tiempo-precio-IV, metricas riesgo/beneficio | T167 |
+| **T09-3** Chat IA y API | Documentacion OpenAPI/Swagger | Anotaciones JSDoc + ruta `/api/docs` | T199 |
+| **T09-3** Chat IA y API | Monte Carlo default en APIs | calendarSpread.ts, diagonalSpread.ts, term-verify.html | T201 |
+| **T09-1** Modelado temporal | Validacion fechas en contrato | `termStrategyContract.ts` — Invalid Date + fecha pasada | T200 |
 | **T09-4** Validacion | Tests unitarios y de integracion | `tests/unit/strategies/term/`, `tests/integration/strategies/term/` | T196, T197, T198 |
 | **T09-4** Validacion | Estandarizacion transversal | Ajuste al estandar transversal de estrategias | T177 |
+| **T09-4** Validacion | Cobertura tests chat assistant | termChatAssistant.test.ts (≥80%) | T202 |
+| **T09-4** Validacion | Cobertura tests report engine | termReportEngine.test.ts (branch ≥80%) | T203 |
+| **T09-5** Features extendidas | Stress Tests Calendar/Diagonal | `calendarSpreadEngine.ts`, `diagonalSpreadEngine.ts` — 5 escenarios predefinidos con P&L, IV y griegas | T204 |
+| **T09-5** Features extendidas | Forward IV Estimator | `termUtils.ts` — `estimateForwardIv()` para pricing de pata larga | T205 |
+| **T09-5** Features extendidas | Report Extendido | `termReportEngine.ts` — probability cone, CVaR, stress P&L summary | T206 |
+| **T09-6** Enriquecimiento comparativo | Griegas completas Calendar | `calendarSpreadEngine.ts` — delta, gamma, vega via Black-Scholes | T207 |
+| **T09-6** Enriquecimiento comparativo | Comparador side-by-side 3 bloques | `termComparator.ts` — Capital & Risk, Greeks, DTE | T208 |
+| **T09-6** Enriquecimiento comparativo | Helpers break-even y net cost | `termReportEngine.ts` — calculateBreakEvens, calculateNetCost | T209 |
 
----
+<!--
+  SECCION 5: Plan de Implementacion por Modulo
+  FUENTE: Speckit expansion
+  PROPOSITO: 19 sub-secciones (5.1 a 5.19) detallando cada modulo del feature:
+  dependencias, estimacion, criterios de aceptacion, habilitadores.
+  INCLUYE: T199-T203 (adiciones Speckit v2) y T204-T206 (adiciones Speckit v3).
+-->
 
 ## 5. Plan de Implementacion por Modulo (Speckit expansion)
 
@@ -204,12 +257,154 @@ Cada fase canonica se materializa en uno o mas modulos de la arquitectura defini
 - Ajustar implementacion de TEAM-09 al estandar transversal definido en `001-inv-tasks.md`
 - Asegurar consistencia de naming, estructura de archivos, manejo de errores y patrones de integracion con el resto de los equipos
 
----
+### 5.12 Documentacion OpenAPI/Swagger — T199
+
+**Dependencias**: T168 (APIs existentes)
+**Estimacion**: 1 unidad de desarrollo
+**Criterio de aceptacion**:
+- Anotaciones JSDoc OpenAPI en los 3 endpoints (calendar, diagonal, compare)
+- Ruta `/api/docs` servida con swagger-ui-express
+- Esquemas de request/response documentados
+- Documentacion consumible por TEAM-01 para integracion
+**Depende de**: T168 completado
+**Habilitador de**: Integracion con TEAM-01 (G-T09-03)
+
+### 5.13 Validacion de Fechas en Contrato Base — T200
+
+**Dependencias**: T162
+**Estimacion**: 0.5 unidades de desarrollo
+**Criterio de aceptacion**:
+- Rechazar `Invalid Date` (NaN) en expiraciones
+- Rechazar fechas de expiracion en pasado
+- Errores descriptivos con codigo y campo afectado
+**Depende de**: T162 completado
+**Habilitador de**: Calidad de datos en motores T163, T164
+
+### 5.14 Monte Carlo Default en APIs — T201
+
+**Dependencias**: T165, T168
+**Estimacion**: 0.5 unidades de desarrollo
+**Criterio de aceptacion**:
+- Ejecutar Monte Carlo por defecto (1000 iteraciones, normal) cuando no se especifique config
+- Mostrar resultados de Monte Carlo en term-verify.html
+- UI con controles basicos de Monte Carlo en pagina de verificacion
+**Depende de**: T165, T168 completados
+**Habilitador de**: Verificacion visual de simulacion Monte Carlo
+
+### 5.15 Tests Chat Assistant — T202
+
+**Dependencias**: S-T09-C01
+**Estimacion**: 0.5 unidades de desarrollo
+**Criterio de aceptacion**:
+- Cobertura de sentencias ≥80% en termChatAssistant.ts
+- Cobertura de ramas ≥80% en termChatAssistant.ts
+- Tests para metodos: buildPurpose, buildRiskProfile, buildUsageConditions, buildScenarioSummary, extractMetrics
+**Depende de**: S-T09-C01 completado
+**Habilitador de**: Cumplimiento RNF-006
+
+### 5.16 Tests Report Engine — T203
+
+**Dependencias**: T167
+**Estimacion**: 0.5 unidades de desarrollo
+**Criterio de aceptacion**:
+- Branch coverage ≥80% en termReportEngine.ts
+- Tests para generateSurface con datos parciales/nulos
+- Tests para calculateRiskMetrics con datos extremos
+- Tests para generateReport con ambas estrategias (calendar/diagonal)
+**Depende de**: T167 completado
+**Habilitador de**: Cumplimiento RNF-006
+
+### 5.17 Stress Tests en Engines — T204
+
+**Dependencias**: T163, T164
+**Estimacion**: 1 unidad de desarrollo
+**Criterio de aceptacion**:
+- CalendarSpreadEngine genera 5 escenarios de stress (Market Crash, Sharp Rally, IV Expansion, IV Contraction, Volatility Spike)
+- Cada escenario incluye: label, descripcion, precio estimado, P&L, cambio en IV
+- DiagonalSpreadEngine genera los mismos 5 escenarios con griegas adicionales (delta, gamma, theta, vega)
+- Stress tests se integran en StructuredReport como campo stressTests
+**Depende de**: T163, T164 completados
+**Habilitador de**: T206 (report extendido)
+
+### 5.18 Forward IV Estimator — T205
+
+**Dependencias**: Ninguna (utilidad matematica pura)
+**Estimacion**: 0.5 unidades de desarrollo
+**Criterio de aceptacion**:
+- Calcula IV forward entre dos tenores usando formula canonica
+- Maneja casos borde (numerador negativo, tenores iguales, IV nula)
+- Implementa fallback conservador cuando la formula produce backwardation extrema
+- Output siempre positivo y acotado
+**Depende de**: —
+**Habilitador de**: Pricing preciso en T163, T164
+
+### 5.19 Report Extendido — T206
+
+**Dependencias**: T163, T164, T167, T204, T205
+**Estimacion**: 1 unidad de desarrollo
+**Criterio de aceptacion**:
+- StructuredReport incluye field stressTests: StressTestEntry[]
+- StructuredReport incluye field probabilityCone: ProbabilityConePoint[]
+- RiskMetrics incluye stressTestMaxLoss, stressTestMaxGain, expectedShortfall (CVaR)
+- generateStressTestSummary() consume stress tests de ambos engines
+- generateProbabilityCone() genera percentiles 5/25/50/75/95
+- estimateExpectedShortfall() calcula CVaR al 95%
+**Depende de**: T165, T167, T204, T205 completados
+**Habilitador de**: RF-009, UI extendida en term-verify.html
+
+### 5.20 Griegas Completas Calendar — T207
+
+**Dependencias**: T163
+**Estimacion**: 0.5 unidades de desarrollo
+**Criterio de aceptacion**:
+- CalendarSpreadEngine.CalendarSpreadResult incluye field `greeks: GreekSensitivities`
+- GreekSensitivities incluye delta, gamma, theta, vega (theta ya existia, se agregan delta/gamma/vega)
+- Griegas calculadas via Black-Scholes con las mismas premisas que diagonalSpreadEngine
+- Tests actualizados para reflejar el nuevo campo requerido
+**Depende de**: T163 completado
+**Habilitador de**: T208 (comparador con griegas completas para Calendar)
+
+### 5.21 Comparador Side-by-Side 3 Bloques — T208
+
+**Dependencias**: T163, T164, T167, T207, T209
+**Estimacion**: 1 unidad de desarrollo
+**Criterio de aceptacion**:
+- POST /compare retorna `CalendarMetrics` y `DiagonalMetrics` con 3 bloques:
+  1. Capital & Risk: cost, maxLoss, maxProfit, breakEvens, probabilityOfProfit
+  2. Greeks Exposure: delta, gamma, theta, vega
+  3. DTE: short, long
+- La recomendacion incluye scores numericos y justificacion textual
+- term-verify.html panel Comparador renderiza tabla side-by-side con los 3 bloques
+**Depende de**: T207, T209 completados
+**Habilitador de**: RF-009 en UI de comparacion
+
+### 5.22 Helpers Break-Even y Net Cost — T209
+
+**Dependencias**: T167
+**Estimacion**: 0.5 unidades de desarrollo
+**Criterio de aceptacion**:
+- calculateBreakEvens(curve: PayoffCurvePoint[]): number[] — retorna precios donde P&L cruza cero
+- calculateNetCost(legs): number — retorna suma de premium*contracts
+- Maneja casos borde: curva con menos de 2 puntos, sin cruce por cero
+- Tests unitarios para ambos metodos
+**Depende de**: T167 completado
+**Habilitador de**: T208 (comparador usa break-evens y cost)
+
+<!--
+  SECCION 6: Grafo de Dependencias
+  FUENTE: Speckit expansion
+  PROPOSITO: Arbol de dependencias entre tareas. La secuencia recomendada es 4 oleadas:
+  Ola 1 (T162->T163+T164+T200) -> Ola 2 (T165->T166+T169) ->
+  Ola 3 (T167+T168+T199+T201+S-T09-C01) -> Ola 4 (T196+T197+T198+T202+T203+T177)
+  REGLA: No saltar oleadas — cada una depende de la anterior.
+-->
 
 ## 6. Grafo de Dependencias (Speckit expansion)
 
 ```
 T162 (termStrategyContract)
+  ├──> T200 (validacion fechas) ← desde T162
+  │
   ├──> T163 (calendarSpreadEngine)
   ├──> T164 (diagonalSpreadEngine)
   │
@@ -217,9 +412,20 @@ T162 (termStrategyContract)
   │     ├──> T166 (termRiskEngine)
   │     │     └──> T169 (termRollOrchestrator)
   │     └──> T167 (termReportEngine)
+  │           └──> T203 (tests report engine)
   │
   ├──> T168 (APIs + Comparator) ← depende de T163, T164, T165, T167
-  ├──> termChatAssistant ← depende de T163, T164, T165
+  │     ├──> T199 (OpenAPI/Swagger)
+  │     └──> T201 (Monte Carlo default) ← desde T165
+  │
+  ├──> T204 (stress tests) ← desde T163, T164
+  │     └──> T206 (report extendido) ← desde T204 + T205
+  │
+  ├──> T205 (forward IV estimator) ← utilidad compartida
+  │     └──> T206 (report extendido)
+  │
+  ├──> S-T09-C01 (Chat IA) ← depende de T163, T164, T165
+  │     └──> T202 (tests chat assistant)
   │
   └──> T196 (tests unitarios engines)
   └──> T197 (tests unitarios simulacion)
@@ -232,8 +438,14 @@ T162 (termStrategyContract)
 2. **Ola 2**: T165 → T166 + T167 (simulacion y riesgo)
 3. **Ola 3**: T169 + T168 + Chat IA (orquestacion y exposicion)
 4. **Ola 4**: T196 + T197 + T198 + T177 (calidad y cierre)
+5. **Ola 5**: T204 + T205 → T206 (features extendidas)
 
----
+<!--
+  SECCION 7-9: Riesgos, Criterios de Validacion, Contratos de Integracion
+  FUENTE: Canon Diana preservado + Speckit expansion
+  PROPOSITO: Documenta 6 riesgos (R-01 a R-06), criterios de exito del plan,
+  y los contratos de integracion obligatorios (auth-context, broker-adapter, signal-lifecycle).
+-->
 
 ## 7. Riesgos (desde canon Diana — preservado y expandido)
 
@@ -282,7 +494,12 @@ T162 (termStrategyContract)
 - API REST con respuestas JSON estructuradas para consumo por frontend y otros equipos.
 - Formato de metricas de theta decay y sensibilidad temporal para UI consolidada (coordinado con TEAM-01).
 
----
+<!--
+  SECCION 10-11: Gaps e Integracion con Speckit
+  FUENTE: team-agent-bootstrap.md + canon Diana
+  PROPOSITO: G-T09-01 a G-T09-03 son gaps pendientes que requieren coordinacion
+  externa. La seccion 11 documenta el flujo de integracion Speckit post-plan.
+-->
 
 ## 10. Gaps y Decisiones Pendientes (desde team-agent-bootstrap.md — preservado)
 
@@ -303,7 +520,13 @@ T162 (termStrategyContract)
 
 **Nota Speckit**: Este plan operativo constituye la salida de `speckit.plan` para TEAM-09. La siguiente etapa es `speckit.tasks` para generar el backlog operativo detallado con asignacion de recursos y estimaciones.
 
----
+<!--
+  SECCION 12-13: SDD Engine Matrix y Cobertura Canonica
+  FUENTE: Speckit expansion
+  PROPOSITO: Verifica que todas las skills requeridas para speckit.plan estan disponibles
+  en el proyecto. El reporte de cobertura garantiza que NO hay omisiones del canon Diana.
+  ESTADO: 12 preserved + 6 expanded + 2 merged + 0 dropped. SIN GAPS.
+-->
 
 ## 12. Trazabilidad con SDD Engine Matrix
 
@@ -363,9 +586,12 @@ T162 (termStrategyContract)
 | **preserved** | 12 |
 | **expanded** | 6 |
 | **merged** | 2 |
+| **added (Speckit expansion v2)** | 5 (T199-T203) |
+| **added (Speckit expansion v3)** | 3 (T204-T206) |
+| **added (Speckit expansion v4)** | 3 (T207-T209) |
 | **dropped** | 0 |
 
-**Resultado: SIN GAPS. Todo el contenido canonico de `teams/TEAM-09/plan.md` y `specs/010-team-09-calendar-diagonal/spec.md` esta preservado, expandido o mergeado. No hay omisiones no justificadas.**
+**Resultado: SIN GAPS. Todo el contenido canonico de `teams/TEAM-09/plan.md` y `specs/010-team-09-calendar-diagonal/spec.md` esta preservado, expandido o mergeado. No hay omisiones no justificadas. Se agregaron 5 nuevas tareas Speckit (T199-T203) en v2 para cubrir brechas de calidad, 3 nuevas tareas (T204-T206) en v3 para features extendidas (stress tests, forward IV, report extendido), y 3 nuevas tareas (T207-T209) en v4 para enriquecimiento comparativo (griegas Calendar, comparador side-by-side, helpers break-even).**
 
 ---
 
@@ -376,6 +602,10 @@ T162 (termStrategyContract)
 - [x] Grafo de dependencias definido
 - [x] Riesgos preservados y expandidos
 - [x] Cobertura canonica validada (preserved: 12, expanded: 6, merged: 2, dropped: 0)
+- [x] Plan operativo generado con trazabilidad 1:1 al canon Diana (v1)
+- [x] Tareas T199-T203 agregadas para cubrir brechas de calidad (v2)
+- [x] Tareas T204-T206 agregadas para features extendidas (v3)
+- [x] Tareas T207-T209 agregadas para enriquecimiento comparativo (v4)
 - [ ] Pendiente: `/diana.integrate action="run" engine="speckit" run_only="tasks"` para generar backlog operativo detallado
 - [ ] Pendiente: Resolver G-T09-01, G-T09-02, G-T09-03 antes de implementacion
 

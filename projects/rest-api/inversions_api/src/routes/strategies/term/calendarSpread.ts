@@ -1,9 +1,19 @@
+/**
+ * calendarSpread.ts — T168 (endpoint REST)
+ * Proposito: Ruta POST /api/v1/strategies/term/calendar.
+ * Orquesta: TermStrategyContract (validacion) -> CalendarSpreadEngine (analisis)
+ *           -> TermSimulationEngine (Monte Carlo + deterministico)
+ *           -> TermReportEngine (reporte estructurado).
+ * Llamado por: src/index.ts (registra el router en /api/v1/strategies/term linea 63)
+ * Dependencias: termStrategyContract, calendarSpreadEngine, termSimulationEngine, termReportEngine
+ */
 import { Router } from "express";
 import { TermStrategyContract } from "../../../modules/strategies/term/termStrategyContract";
 import { CalendarSpreadEngine } from "../../../modules/strategies/term/calendarSpreadEngine";
 import { TermSimulationEngine } from "../../../modules/strategies/term/termSimulationEngine";
 import { TermReportEngine } from "../../../modules/strategies/term/termReportEngine";
 
+/** Request body para POST /calendar */
 export interface CalendarRequest {
   legs: Array<{
     strike: number;
@@ -20,6 +30,57 @@ export interface CalendarRequest {
 
 export const calendarSpreadRouter = Router();
 
+/**
+ * @openapi
+ * /calendar:
+ *   post:
+ *     tags: [Calendar Spread]
+ *     summary: Calcula metricas y escenarios de un Calendar Spread
+ *     description: >
+ *       Evalua un Calendar Spread (call/put) recibiendo las dos patas del spread
+ *       con el mismo strike y expiraciones diferentes. Retorna metricas de theta decay,
+ *       escenarios de precio, simulacion Monte Carlo/determinista y reporte completo.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [legs]
+ *             properties:
+ *               legs:
+ *                 type: array
+ *                 minItems: 2
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     strike:       { type: number, example: 100 }
+ *                     expiration:   { type: string, format: date, example: "2026-06-19" }
+ *                     premium:      { type: number, example: 2.50 }
+ *                     contracts:    { type: integer, example: 1 }
+ *                     optionStyle:  { type: string, enum: [call, put], example: "call" }
+ *               riskFreeRate: { type: number, example: 0.05 }
+ *               ivCurve:      { type: array, items: { type: object, properties: { dte: { type: integer }, iv: { type: number } } } }
+ *               monteCarlo:   { type: object, properties: { iterations: { type: integer }, distribution: { type: string, enum: [normal, lognormal] } } }
+ *     responses:
+ *       200:
+ *         description: Calendar Spread calculado exitosamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 strategy:  { type: string, example: "calendar" }
+ *                 analysis:  { type: object, properties: { shortDte: { type: integer }, longDte: { type: integer }, netTheta: { type: number } } }
+ *                 scenarios: { type: array, items: { type: object } }
+ *                 simulation: { type: object, properties: { deterministic: { type: array }, monteCarlo: { type: object } } }
+ *                 report:    { type: object }
+ *       400:
+ *         description: Error de validacion
+ *       500:
+ *         description: Error interno del servidor
+ */
+/** POST /calendar: valida contrato, analiza con CalendarSpreadEngine, simula, genera reporte estructurado. Llamado desde src/index.ts linea 63 */
 calendarSpreadRouter.post("/calendar", (req, res) => {
   try {
     const body = req.body as CalendarRequest;
@@ -49,9 +110,8 @@ calendarSpreadRouter.post("/calendar", (req, res) => {
     const result = engine.analyze();
 
     const simulation = new TermSimulationEngine(contract, engine, null, body.riskFreeRate ?? 0.05, body.ivCurve ?? []);
-    const simResult = body.monteCarlo
-      ? simulation.simulate(undefined, body.monteCarlo)
-      : simulation.simulate();
+    const mcConfig = body.monteCarlo ?? { iterations: 1000, distribution: "normal" as const };
+    const simResult = simulation.simulate(undefined, mcConfig);
 
     const report = new TermReportEngine(result, null, simResult, null);
 
