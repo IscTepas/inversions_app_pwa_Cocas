@@ -35,11 +35,11 @@ export const calendarSpreadRouter = Router();
  * /calendar:
  *   post:
  *     tags: [Calendar Spread]
- *     summary: Calcula metricas y escenarios de un Calendar Spread
+ *     summary: Calcula métricas y escenarios de un Calendar Spread
  *     description: >
- *       Evalua un Calendar Spread (call/put) recibiendo las dos patas del spread
- *       con el mismo strike y expiraciones diferentes. Retorna metricas de theta decay,
- *       escenarios de precio, simulacion Monte Carlo/determinista y reporte completo.
+ *       Evalúa un Calendar Spread (call/put) recibiendo las dos patas del spread
+ *       con el mismo strike y expiraciones diferentes. Retorna métricas de theta decay,
+ *       escenarios de precio, simulación Monte Carlo/determinista y reporte completo.
  *     requestBody:
  *       required: true
  *       content:
@@ -76,18 +76,24 @@ export const calendarSpreadRouter = Router();
  *                 simulation: { type: object, properties: { deterministic: { type: array }, monteCarlo: { type: object } } }
  *                 report:    { type: object }
  *       400:
- *         description: Error de validacion
+ *         description: Error de validación
  *       500:
  *         description: Error interno del servidor
  */
 /** POST /calendar: valida contrato, analiza con CalendarSpreadEngine, simula, genera reporte estructurado. Llamado desde src/index.ts linea 63 */
-calendarSpreadRouter.post("/calendar", (req, res) => {
+calendarSpreadRouter.post("/calendar", async (req, res) => {
   try {
     const body = req.body as CalendarRequest;
 
-    if (!body.legs || body.legs.length < 2) {
-      res.status(400).json({ error: "At least 2 legs are required" });
-      return;
+    if (!body || !body.legs || body.legs.length < 2) {
+      console.error("Error: Missing or invalid request body."); // Logging
+      return res.status(400).json({ error: "Solicitud inválida: cuerpo de la solicitud faltante o incorrecto." });
+    }
+
+    // Seguridad: Validar underlying (alphanumeric)
+    if (body.underlying && !/^[a-zA-Z0-9]+$/.test(body.underlying)) {
+      console.error("Error: Underlying symbol contains invalid characters."); // Logging
+      return res.status(400).json({ error: "Símbolo subyacente contiene caracteres inválidos." });
     }
 
     const contract = new TermStrategyContract({
@@ -98,10 +104,10 @@ calendarSpreadRouter.post("/calendar", (req, res) => {
       underlying: body.underlying,
     });
 
-    const validation = contract.validate();
-    if (!validation.isValid) {
-      res.status(400).json({ error: "Validation failed", details: validation.errors });
-      return;
+    const validationResult = contract.validate(); // Get the validation result object
+    if (!validationResult.isValid) {
+      console.error("Validation failed:", validationResult.errors); // Logging
+      return res.status(400).json({ error: "Validación fallida", details: validationResult.errors });
     }
 
     const engine = new CalendarSpreadEngine(
@@ -131,8 +137,9 @@ calendarSpreadRouter.post("/calendar", (req, res) => {
       },
       report: report.generateReport(),
     });
+
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    res.status(500).json({ error: message });
+    console.error("Internal server error:", error); // Logging
+    res.status(500).json({ error: "Error interno del servidor" });
   }
 });
