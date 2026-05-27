@@ -67,6 +67,20 @@
   .winner-diag { background: #1e3a5f; color: var(--accent); }
   .winner-tie { background: #334155; color: var(--muted); }
   .reason-cell { font-size: 0.75rem; color: var(--muted); font-style: italic; max-width: 220px; }
+  .section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+  .section-title h3 { margin-bottom: 0; }
+  .pill { display: inline-flex; align-items: center; padding: 3px 10px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: 0.72rem; font-weight: 600; }
+  .summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .summary-item { background: #0f172a; border: 1px solid #25334a; border-radius: 6px; padding: 10px 12px; min-height: 64px; }
+  .summary-item .lbl { color: var(--muted); font-size: 0.72rem; margin-bottom: 4px; }
+  .summary-item .val { color: var(--text); font-size: 0.95rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .explain-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .explain-item { background: #0f172a; border-left: 3px solid var(--accent); border-radius: 6px; padding: 10px 12px; color: var(--muted); line-height: 1.45; font-size: 0.82rem; }
+  .explain-item strong { display: block; color: var(--text); margin-bottom: 4px; }
+  @media (max-width: 760px) {
+    body { padding: 14px; }
+    .summary-grid, .explain-list { grid-template-columns: 1fr; }
+  }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
@@ -260,6 +274,13 @@ function showError(el, msg) {
     </div>`;
 }
 
+function netEntryCost(legs) {
+  if (!legs || legs.length < 2) return 0;
+  const shortLeg = legs[0];
+  const longLeg = legs[1];
+  return longLeg.premium * longLeg.contracts - shortLeg.premium * shortLeg.contracts;
+}
+
 // === CALENDAR ===
 function buildCalendarBody() {
   const s = $('cal-strike').value;
@@ -280,24 +301,37 @@ async function testCalendar() {
   const el = $('cal-result');
   el.innerHTML = '<p style="color:var(--muted)">Cargando…</p>';
   try {
-    const d = await post(`${API_BASE}/calendar`, buildCalendarBody());
+    const body = buildCalendarBody();
+    const d = await post(`${API_BASE}/calendar`, body);
     const a = d.analysis || {};
+    const m = d.report?.riskMetrics || {};
+    const entryCost = netEntryCost(body.legs);
     el.innerHTML = `
+      ${buildCalendarPositionSummary(body, entryCost)}
       <div class="card">
-        <h3>Métricas Clave</h3>
+        <div class="section-title">
+          <h3>Métricas Calendar</h3>
+          <span class="pill">tiempo + sensibilidad</span>
+        </div>
         <div class="metric-grid">
           <div class="metric"><div class="val ${cls(a.netTheta)}">${fmt(a.netTheta)}</div><div class="lbl">Theta Neta</div></div>
+          <div class="metric"><div class="val ${cls(m.netDelta)}">${fmt(m.netDelta,3)}</div><div class="lbl">Delta</div></div>
+          <div class="metric"><div class="val ${cls(m.netGamma)}">${fmt(m.netGamma,3)}</div><div class="lbl">Gamma</div></div>
+          <div class="metric"><div class="val ${cls(m.netVega)}">${fmt(m.netVega)}</div><div class="lbl">Vega</div></div>
           <div class="metric"><div class="val">${fmt(a.shortDte,0)}</div><div class="lbl">DTE Corto</div></div>
           <div class="metric"><div class="val">${fmt(a.longDte,0)}</div><div class="lbl">DTE Largo</div></div>
           <div class="metric"><div class="val ${cls(a.shortTheta)}">${fmt(a.shortTheta)}</div><div class="lbl">θ Corta</div></div>
           <div class="metric"><div class="val ${cls(a.longTheta)}">${fmt(a.longTheta)}</div><div class="lbl">θ Larga</div></div>
         </div>
       </div>
+      ${buildCalendarExplanation(entryCost, a, m)}
       ${d.report ? buildPayoffTable(d.report.payoffCurve) : ''}
-      ${d.report ? buildRiskMetrics(d.report.riskMetrics) : ''}
       ${d.report && d.report.surface ? buildSurfaceInfo(d.report.surface) : ''}
       <div class="card">
-        <h3>Escenarios de Precio (${d.scenarios?.length ?? 0})</h3>
+        <div class="section-title">
+          <h3>Escenarios Calendar (${d.scenarios?.length ?? 0})</h3>
+          <span class="pill">P&amp;L = valor - costo neto</span>
+        </div>
         <div class="scroll">
           <table><thead><tr><th>Precio</th><th>Valor Estrat.</th><th>P&amp;L</th><th>θ</th></tr></thead>
           <tbody>${(d.scenarios || []).map(s => `<tr><td>$${fmt(s.underlyingPrice,1)}</td><td>$${fmt(s.strategyValue)}</td><td class="${cls(s.pnl)}">$${fmt(s.pnl)}</td><td class="${cls(s.theta)}">${fmt(s.theta)}</td></tr>`).join('')}</tbody></table>
@@ -309,6 +343,44 @@ async function testCalendar() {
       <p style="color:var(--muted);font-size:0.75rem">generatedAt: ${d.report?.generatedAt ?? '—'}</p>
     `;
   } catch (e) { showError(el, e.message); }
+}
+
+function buildCalendarPositionSummary(body, entryCost) {
+  const shortLeg = body.legs[0];
+  const longLeg = body.legs[1];
+  const style = String(shortLeg.optionStyle || '').toUpperCase();
+  return `<div class="card">
+    <div class="section-title">
+      <h3>Resumen Calendar Spread</h3>
+      <span class="pill">${style} · ${shortLeg.contracts} contrato(s)</span>
+    </div>
+    <div class="summary-grid">
+      <div class="summary-item"><div class="lbl">Strike común</div><div class="val">$${fmt(shortLeg.strike,2)}</div></div>
+      <div class="summary-item"><div class="lbl">Expiración corta</div><div class="val">${shortLeg.expiration}</div></div>
+      <div class="summary-item"><div class="lbl">Expiración larga</div><div class="val">${longLeg.expiration}</div></div>
+      <div class="summary-item"><div class="lbl">Costo neto entrada</div><div class="val ${cls(-entryCost)}">$${fmt(entryCost)}</div></div>
+      <div class="summary-item"><div class="lbl">Prima corta vendida</div><div class="val">$${fmt(shortLeg.premium)}</div></div>
+      <div class="summary-item"><div class="lbl">Prima larga comprada</div><div class="val">$${fmt(longLeg.premium)}</div></div>
+      <div class="summary-item"><div class="lbl">Diferencia primas</div><div class="val">$${fmt(longLeg.premium - shortLeg.premium)}</div></div>
+      <div class="summary-item"><div class="lbl">Tasa libre riesgo</div><div class="val">${fmt(body.riskFreeRate * 100,2)}%</div></div>
+    </div>
+  </div>`;
+}
+
+function buildCalendarExplanation(entryCost, analysis, metrics) {
+  const thetaTone = (analysis.netTheta ?? 0) >= 0 ? 'theta neta positiva' : 'theta neta negativa';
+  const pop = metrics.probabilityOfProfit === undefined ? 'sin estimación POP' : `${fmt(metrics.probabilityOfProfit * 100,1)}% POP`;
+  return `<div class="card">
+    <div class="section-title">
+      <h3>Lectura Operativa</h3>
+      <span class="pill">solo análisis, no ejecución</span>
+    </div>
+    <div class="explain-list">
+      <div class="explain-item"><strong>Qué modela</strong>Calendar compara una pata corta y una larga con el mismo strike para observar deterioro temporal, IV y escenarios de precio.</div>
+      <div class="explain-item"><strong>Costo usado</strong>El P&amp;L se calcula contra el costo neto real de entrada: $${fmt(entryCost)} considerando primas y contratos.</div>
+      <div class="explain-item"><strong>Señal a revisar</strong>La estructura muestra ${thetaTone}, ${pop} y debe validarse contra stress tests antes de cualquier decisión humana.</div>
+    </div>
+  </div>`;
 }
 
 // === DIAGONAL ===
