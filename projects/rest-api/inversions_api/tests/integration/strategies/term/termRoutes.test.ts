@@ -6,15 +6,33 @@
  * (logica de rutas sin HTTP — prueba directa de modulos)
  */
 import { describe, it, expect } from "vitest";
+import express from "express";
+import request from "supertest";
 import { TermStrategyContract } from "../../../../src/modules/strategies/term/termStrategyContract";
 import { CalendarSpreadEngine } from "../../../../src/modules/strategies/term/calendarSpreadEngine";
 import { DiagonalSpreadEngine } from "../../../../src/modules/strategies/term/diagonalSpreadEngine";
+import { calendarSpreadRouter } from "../../../../src/routes/strategies/term/calendarSpread";
+import { diagonalSpreadRouter } from "../../../../src/routes/strategies/term/diagonalSpread";
 
 /** Tests de integracion: flujos completos de calendar, diagonal y comparator sin HTTP */
 describe("Term API Integration", () => {
   const now = new Date();
   const shortExp = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   const longExp = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+
+  const buildCalendarApp = () => {
+    const app = express();
+    app.use(express.json());
+    app.use("/api/v1/strategies/term", calendarSpreadRouter);
+    return app;
+  };
+
+  const buildDiagonalApp = () => {
+    const app = express();
+    app.use(express.json());
+    app.use("/api/v1/strategies/term", diagonalSpreadRouter);
+    return app;
+  };
 
   /** Tests de logica de ruta calendar: validacion, analisis completo, manejo errores */
   describe("Calendar Spread Route Logic", () => {
@@ -59,6 +77,44 @@ describe("Term API Integration", () => {
       const validation = contract.validate();
       expect(validation.isValid).toBe(false);
     });
+
+    it("should expose explicit Calendar Call API variant", async () => {
+      const app = buildCalendarApp();
+      const response = await request(app)
+        .post("/api/v1/strategies/term/calendar/call")
+        .send({
+          legs: [
+            { strike: 100, expiration: shortExp.toISOString(), premium: 2.5, contracts: 1, optionStyle: "put" },
+            { strike: 100, expiration: longExp.toISOString(), premium: 5, contracts: 1, optionStyle: "put" },
+          ],
+          underlying: "AAPL",
+          monteCarlo: { iterations: 10, distribution: "normal" },
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.strategy).toBe("calendar");
+      expect(response.body.variant).toBe("call");
+      expect(response.body.structureName).toBe("Calendar Call Spread");
+    });
+
+    it("should expose explicit Calendar Put API variant", async () => {
+      const app = buildCalendarApp();
+      const response = await request(app)
+        .post("/api/v1/strategies/term/calendar/put")
+        .send({
+          legs: [
+            { strike: 100, expiration: shortExp.toISOString(), premium: 2.5, contracts: 1, optionStyle: "call" },
+            { strike: 100, expiration: longExp.toISOString(), premium: 5, contracts: 1, optionStyle: "call" },
+          ],
+          underlying: "AAPL",
+          monteCarlo: { iterations: 10, distribution: "normal" },
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.strategy).toBe("calendar");
+      expect(response.body.variant).toBe("put");
+      expect(response.body.structureName).toBe("Calendar Put Spread");
+    });
   });
 
   /** Tests de logica de ruta diagonal: validacion, analisis completo, rechazo calendar en /diagonal */
@@ -92,6 +148,44 @@ describe("Term API Integration", () => {
         ],
       });
       expect(contract.getType()).toBe("calendar");
+    });
+
+    it("should expose explicit Diagonal Call API variant", async () => {
+      const app = buildDiagonalApp();
+      const response = await request(app)
+        .post("/api/v1/strategies/term/diagonal/call")
+        .send({
+          legs: [
+            { strike: 95, expiration: shortExp.toISOString(), premium: 3.5, contracts: 1, optionStyle: "put" },
+            { strike: 105, expiration: longExp.toISOString(), premium: 4, contracts: 1, optionStyle: "put" },
+          ],
+          underlying: "AAPL",
+          monteCarlo: { iterations: 10, distribution: "normal" },
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.strategy).toBe("diagonal");
+      expect(response.body.variant).toBe("call");
+      expect(response.body.structureName).toBe("Diagonal Call Spread");
+    });
+
+    it("should expose explicit Diagonal Put API variant", async () => {
+      const app = buildDiagonalApp();
+      const response = await request(app)
+        .post("/api/v1/strategies/term/diagonal/put")
+        .send({
+          legs: [
+            { strike: 95, expiration: shortExp.toISOString(), premium: 3.5, contracts: 1, optionStyle: "call" },
+            { strike: 105, expiration: longExp.toISOString(), premium: 4, contracts: 1, optionStyle: "call" },
+          ],
+          underlying: "AAPL",
+          monteCarlo: { iterations: 10, distribution: "normal" },
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.strategy).toBe("diagonal");
+      expect(response.body.variant).toBe("put");
+      expect(response.body.structureName).toBe("Diagonal Put Spread");
     });
   });
 

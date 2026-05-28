@@ -74,6 +74,10 @@
   .summary-item { background: #0f172a; border: 1px solid #25334a; border-radius: 6px; padding: 10px 12px; min-height: 64px; }
   .summary-item .lbl { color: var(--muted); font-size: 0.72rem; margin-bottom: 4px; }
   .summary-item .val { color: var(--text); font-size: 0.95rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .strategy-hero { background: #0f172a; border: 1px solid #2563eb; border-left: 4px solid var(--accent); border-radius: 6px; padding: 12px 14px; margin-bottom: 12px; }
+  .strategy-hero .name { font-size: 1rem; font-weight: 800; color: var(--text); margin-bottom: 4px; }
+  .strategy-hero .desc { color: var(--muted); font-size: 0.82rem; line-height: 1.4; }
+  .strategy-hero code { color: #bae6fd; background: #172554; border: 1px solid #1d4ed8; border-radius: 4px; padding: 2px 6px; }
   .explain-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
   .explain-item { background: #0f172a; border-left: 3px solid var(--accent); border-radius: 6px; padding: 10px 12px; color: var(--muted); line-height: 1.45; font-size: 0.82rem; }
   .explain-item strong { display: block; color: var(--text); margin-bottom: 4px; }
@@ -259,8 +263,22 @@ async function checkHealth() {
 
 async function post(url, body) {
   const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  if (!r.ok) { const e = await r.json().catch(() => ({ error: r.statusText })); throw new Error(e.error || e.message || r.statusText); }
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({ error: r.statusText }));
+    const err = new Error(e.error || e.message || r.statusText);
+    err.status = r.status;
+    throw err;
+  }
   return r.json();
+}
+
+async function postWithFallback(primaryUrl, fallbackUrl, body) {
+  try {
+    return { data: await post(primaryUrl, body), path: primaryUrl.replace(API_BASE, '') };
+  } catch (e) {
+    if (e.status !== 404 || !fallbackUrl) throw e;
+    return { data: await post(fallbackUrl, body), path: fallbackUrl.replace(API_BASE, '') };
+  }
 }
 
 function showResult(el, html) { el.innerHTML = html; }
@@ -302,16 +320,24 @@ async function testCalendar() {
   el.innerHTML = '<p style="color:var(--muted)">Cargando…</p>';
   try {
     const body = buildCalendarBody();
-    const d = await post(`${API_BASE}/calendar`, body);
+    const variant = body.legs[0].optionStyle;
+    const { data: d, path: apiPath } = await postWithFallback(
+      `${API_BASE}/calendar/${variant}`,
+      `${API_BASE}/calendar`,
+      body
+    );
     const a = d.analysis || {};
     const m = d.report?.riskMetrics || {};
     const entryCost = netEntryCost(body.legs);
     el.innerHTML = `
-      ${buildCalendarPositionSummary(body, entryCost)}
       <div class="card">
         <div class="section-title">
-          <h3>Métricas Calendar</h3>
-          <span class="pill">tiempo + sensibilidad</span>
+          <h3>Métricas ${d.structureName || 'Calendar Spread'}</h3>
+          <span class="pill">API ${apiPath}</span>
+        </div>
+        <div class="strategy-hero">
+          <div class="name">${d.structureName || 'Calendar Spread'}</div>
+          <div class="desc">${d.structureDescription || 'Estructura temporal con pata corta y pata larga.'} Costo neto: <strong>$${fmt(entryCost)}</strong>.</div>
         </div>
         <div class="metric-grid">
           <div class="metric"><div class="val ${cls(a.netTheta)}">${fmt(a.netTheta)}</div><div class="lbl">Theta Neta</div></div>
@@ -324,7 +350,7 @@ async function testCalendar() {
           <div class="metric"><div class="val ${cls(a.longTheta)}">${fmt(a.longTheta)}</div><div class="lbl">θ Larga</div></div>
         </div>
       </div>
-      ${buildCalendarExplanation(entryCost, a, m)}
+      ${buildCalendarExplanation(entryCost, a, m, d)}
       ${d.report ? buildPayoffTable(d.report.payoffCurve) : ''}
       ${d.report && d.report.surface ? buildSurfaceInfo(d.report.surface) : ''}
       <div class="card">
@@ -345,40 +371,22 @@ async function testCalendar() {
   } catch (e) { showError(el, e.message); }
 }
 
-function buildCalendarPositionSummary(body, entryCost) {
-  const shortLeg = body.legs[0];
-  const longLeg = body.legs[1];
-  const style = String(shortLeg.optionStyle || '').toUpperCase();
-  return `<div class="card">
-    <div class="section-title">
-      <h3>Resumen Calendar Spread</h3>
-      <span class="pill">${style} · ${shortLeg.contracts} contrato(s)</span>
-    </div>
-    <div class="summary-grid">
-      <div class="summary-item"><div class="lbl">Strike común</div><div class="val">$${fmt(shortLeg.strike,2)}</div></div>
-      <div class="summary-item"><div class="lbl">Expiración corta</div><div class="val">${shortLeg.expiration}</div></div>
-      <div class="summary-item"><div class="lbl">Expiración larga</div><div class="val">${longLeg.expiration}</div></div>
-      <div class="summary-item"><div class="lbl">Costo neto entrada</div><div class="val ${cls(-entryCost)}">$${fmt(entryCost)}</div></div>
-      <div class="summary-item"><div class="lbl">Prima corta vendida</div><div class="val">$${fmt(shortLeg.premium)}</div></div>
-      <div class="summary-item"><div class="lbl">Prima larga comprada</div><div class="val">$${fmt(longLeg.premium)}</div></div>
-      <div class="summary-item"><div class="lbl">Diferencia primas</div><div class="val">$${fmt(longLeg.premium - shortLeg.premium)}</div></div>
-      <div class="summary-item"><div class="lbl">Tasa libre riesgo</div><div class="val">${fmt(body.riskFreeRate * 100,2)}%</div></div>
-    </div>
-  </div>`;
-}
-
-function buildCalendarExplanation(entryCost, analysis, metrics) {
+function buildCalendarExplanation(entryCost, analysis, metrics, response) {
   const thetaTone = (analysis.netTheta ?? 0) >= 0 ? 'theta neta positiva' : 'theta neta negativa';
   const pop = metrics.probabilityOfProfit === undefined ? 'sin estimación POP' : `${fmt(metrics.probabilityOfProfit * 100,1)}% POP`;
+  const variant = response.variant === 'put' ? 'put' : 'call';
+  const sideText = variant === 'call'
+    ? 'Calendar Call evalúa una venta de call cercana y una compra de call lejana sobre el mismo strike.'
+    : 'Calendar Put evalúa una venta de put cercana y una compra de put lejana sobre el mismo strike.';
   return `<div class="card">
     <div class="section-title">
       <h3>Lectura Operativa</h3>
       <span class="pill">solo análisis, no ejecución</span>
     </div>
     <div class="explain-list">
-      <div class="explain-item"><strong>Qué modela</strong>Calendar compara una pata corta y una larga con el mismo strike para observar deterioro temporal, IV y escenarios de precio.</div>
+      <div class="explain-item"><strong>Qué modela</strong>${sideText} Observa deterioro temporal, IV y escenarios de precio.</div>
       <div class="explain-item"><strong>Costo usado</strong>El P&amp;L se calcula contra el costo neto real de entrada: $${fmt(entryCost)} considerando primas y contratos.</div>
-      <div class="explain-item"><strong>Señal a revisar</strong>La estructura muestra ${thetaTone}, ${pop} y debe validarse contra stress tests antes de cualquier decisión humana.</div>
+      <div class="explain-item"><strong>Señal a revisar</strong>La API devuelve variante ${variant.toUpperCase()}, ${thetaTone}, ${pop} y debe validarse contra stress tests antes de cualquier decisión humana.</div>
     </div>
   </div>`;
 }
@@ -402,29 +410,52 @@ async function testDiagonal() {
   const el = $('diag-result');
   el.innerHTML = '<p style="color:var(--muted)">Cargando…</p>';
   try {
-    const d = await post(`${API_BASE}/diagonal`, buildDiagonalBody());
+    const body = buildDiagonalBody();
+    const variant = body.legs[0].optionStyle;
+    const { data: d, path: apiPath } = await postWithFallback(
+      `${API_BASE}/diagonal/${variant}`,
+      `${API_BASE}/diagonal`,
+      body
+    );
     const a = d.analysis || {};
     const g = a.greeks || {};
+    const m = d.report?.riskMetrics || {};
+    const entryCost = d.netEntryCost ?? netEntryCost(body.legs);
     el.innerHTML = `
       <div class="card">
-        <h3>Métricas Clave</h3>
+        <div class="section-title">
+          <h3>Métricas ${d.structureName || 'Diagonal Spread'}</h3>
+          <span class="pill">API ${apiPath}</span>
+        </div>
+        <div class="strategy-hero">
+          <div class="name">${d.structureName || 'Diagonal Spread'}</div>
+          <div class="desc">${d.structureDescription || 'Estructura temporal con strikes y expiraciones diferentes.'} Costo neto: <strong>$${fmt(entryCost)}</strong>.</div>
+        </div>
         <div class="metric-grid">
-          <div class="metric"><div class="val ${cls(g.delta)}">${fmt(g.delta)}</div><div class="lbl">Δ Neta</div></div>
-          <div class="metric"><div class="val ${cls(g.gamma)}">${fmt(g.gamma)}</div><div class="lbl">Γ Neta</div></div>
+          <div class="metric"><div class="val ${cls(g.delta)}">${fmt(g.delta,3)}</div><div class="lbl">Δ Neta</div></div>
+          <div class="metric"><div class="val ${cls(g.gamma)}">${fmt(g.gamma,3)}</div><div class="lbl">Γ Neta</div></div>
           <div class="metric"><div class="val ${cls(g.theta)}">${fmt(g.theta)}</div><div class="lbl">θ Neta</div></div>
           <div class="metric"><div class="val ${cls(g.vega)}">${fmt(g.vega)}</div><div class="lbl">V Neta</div></div>
           <div class="metric"><div class="val">${fmt(a.shortDte,0)}</div><div class="lbl">DTE Corto</div></div>
           <div class="metric"><div class="val">${fmt(a.longDte,0)}</div><div class="lbl">DTE Largo</div></div>
+          <div class="metric"><div class="val">${m.probabilityOfProfit !== undefined ? fmt(m.probabilityOfProfit*100,1)+'%' : '—'}</div><div class="lbl">POP</div></div>
+          <div class="metric"><div class="val">${fmt(m.sharpeRatio)}</div><div class="lbl">Sharpe</div></div>
         </div>
         <div class="row" style="margin-top:8px">
           <div><span style="color:var(--muted);font-size:0.8rem">Perfil: </span>${tag(a.directionalProfile,'neutral','bullish')}</div>
           <div><span style="color:var(--muted);font-size:0.8rem">Ajuste: </span>${a.adjustmentWindow ? '<span class="tag tag-red">Requiere ajuste</span>' : '<span class="tag tag-green">Sin ajuste</span>'}</div>
         </div>
       </div>
+      ${buildDiagonalExplanation(entryCost, a, m, d)}
       ${d.report ? buildPayoffTable(d.report.payoffCurve) : ''}
       ${d.report ? buildRiskMetrics(d.report.riskMetrics) : ''}
+      ${buildThetaDecayTable(d.thetaDecayProfile)}
+      ${buildVegaShockTable(d.vegaShockProfile)}
       <div class="card">
-        <h3>Escenarios de Precio (${d.scenarios?.length ?? 0})</h3>
+        <div class="section-title">
+          <h3>Escenarios de Precio (${d.scenarios?.length ?? 0})</h3>
+          <span class="pill">P&amp;L vs precio subyacente</span>
+        </div>
         <div class="scroll">
           <table><thead><tr><th>Precio</th><th>Valor</th><th>P&amp;L</th><th>Δ</th><th>θ</th><th>V</th></tr></thead>
           <tbody>${(d.scenarios || []).map(s => `<tr><td>$${fmt(s.underlyingPrice,1)}</td><td>$${fmt(s.strategyValue)}</td><td class="${cls(s.pnl)}">$${fmt(s.pnl)}</td><td class="${cls(s.greeks?.delta)}">${fmt(s.greeks?.delta)}</td><td class="${cls(s.greeks?.theta)}">${fmt(s.greeks?.theta)}</td><td class="${cls(s.greeks?.vega)}">${fmt(s.greeks?.vega)}</td></tr>`).join('')}</tbody></table>
@@ -436,6 +467,58 @@ async function testDiagonal() {
       <p style="color:var(--muted);font-size:0.75rem">generatedAt: ${d.report?.generatedAt ?? '—'}</p>
     `;
   } catch (e) { showError(el, e.message); }
+}
+
+function buildDiagonalExplanation(entryCost, analysis, metrics, response) {
+  const thetaTone = (analysis.greeks?.theta ?? 0) >= 0 ? 'theta neta positiva' : 'theta neta negativa';
+  const pop = metrics.probabilityOfProfit === undefined ? 'sin estimación POP' : `${fmt(metrics.probabilityOfProfit * 100,1)}% POP`;
+  const profile = response.analysis?.directionalProfile || 'neutral';
+  const variant = response.variant === 'put' ? 'put' : 'call';
+  const sideText = variant === 'call'
+    ? 'Diagonal Call evalúa una venta de call cercana y una compra de call lejana con strike diferente.'
+    : 'Diagonal Put evalúa una venta de put cercana y una compra de put lejana con strike diferente.';
+  const adjText = analysis.adjustmentWindow
+    ? `Ventana de ajuste activa — ${analysis.adjustmentWindow.recommendation}`
+    : 'Sin ventana de ajuste activa. La posición no requiere roll inmediato.';
+  return `<div class="card">
+    <div class="section-title">
+      <h3>Lectura Operativa</h3>
+      <span class="pill">solo análisis, no ejecución</span>
+    </div>
+    <div class="explain-list">
+      <div class="explain-item"><strong>Qué modela</strong>${sideText} Combina theta decay con exposición direccional (${profile}).</div>
+      <div class="explain-item"><strong>Costo usado</strong>El P&amp;L se calcula contra el costo neto real de entrada: $${fmt(entryCost)} considerando primas y contratos.</div>
+      <div class="explain-item"><strong>Señal a revisar</strong>La API devuelve ${thetaTone}, ${pop}. ${adjText}</div>
+    </div>
+  </div>`;
+}
+
+function buildThetaDecayTable(profile) {
+  if (!profile || profile.length === 0) return '';
+  return `<div class="card">
+    <div class="section-title">
+      <h3>Theta Decay (${profile.length} puntos)</h3>
+      <span class="pill">evolución temporal @ ATM</span>
+    </div>
+    <div class="scroll">
+      <table><thead><tr><th>Subyacente</th><th>Valor Estrat.</th><th>P&amp;L</th><th>θ</th><th>Δ</th><th>V</th></tr></thead>
+      <tbody>${profile.map(p => `<tr><td>$${fmt(p.underlyingPrice,1)}</td><td>$${fmt(p.strategyValue)}</td><td class="${cls(p.pnl)}">$${fmt(p.pnl)}</td><td class="${cls(p.greeks?.theta)}">${fmt(p.greeks?.theta)}</td><td class="${cls(p.greeks?.delta)}">${fmt(p.greeks?.delta)}</td><td class="${cls(p.greeks?.vega)}">${fmt(p.greeks?.vega)}</td></tr>`).join('')}</tbody></table>
+    </div>
+  </div>`;
+}
+
+function buildVegaShockTable(profile) {
+  if (!profile || profile.length === 0) return '';
+  return `<div class="card">
+    <div class="section-title">
+      <h3>Vega Shock (${profile.length} escenarios IV)</h3>
+      <span class="pill">sensibilidad a volatilidad</span>
+    </div>
+    <div class="scroll">
+      <table><thead><tr><th>Subyacente</th><th>Valor Estrat.</th><th>P&amp;L vs IV base</th><th>V Neta</th></tr></thead>
+      <tbody>${profile.map(p => `<tr><td>$${fmt(p.underlyingPrice,1)}</td><td>$${fmt(p.strategyValue)}</td><td class="${cls(p.pnl)}">$${fmt(p.pnl)}</td><td class="${cls(p.greeks?.vega)}">${fmt(p.greeks?.vega)}</td></tr>`).join('')}</tbody></table>
+    </div>
+  </div>`;
 }
 
 // === COMPARE ===

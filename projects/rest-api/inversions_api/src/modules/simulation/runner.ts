@@ -34,6 +34,8 @@ export interface SimulationValidationError {
 }
 
 export const KNOWN_ESTRATEGIAS = new Set<string>([
+  "CALENDAR_SPREAD",
+  "DIAGONAL_SPREAD",
   "IRON_CONDOR",
   "BULL_CALL_SPREAD",
   "BEAR_PUT_SPREAD",

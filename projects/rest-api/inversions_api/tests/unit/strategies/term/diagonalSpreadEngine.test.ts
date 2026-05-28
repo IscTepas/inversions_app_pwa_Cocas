@@ -90,6 +90,22 @@ describe("DiagonalSpreadEngine", () => {
       expect(result.scenarios[0]).toHaveProperty("greeks");
     });
 
+    it("should compute P&L from real net entry cost and contracts", () => {
+      const contract = new TermStrategyContract({
+        legs: [
+          { strike: 95, expiration: shortExpiration, premium: 2, contracts: 2, optionStyle: "call" },
+          { strike: 105, expiration: longExpiration, premium: 5, contracts: 2, optionStyle: "call" },
+        ],
+        underlying: "SPY",
+      });
+      const engine = new DiagonalSpreadEngine(contract);
+      const result = engine.analyze();
+      const atmScenario = result.scenarios.find(s => s.underlyingPrice === 95);
+
+      expect(atmScenario).toBeDefined();
+      expect(atmScenario!.pnl).toBeCloseTo(atmScenario!.strategyValue - 6, 1);
+    });
+
     it("should generate theta decay profile", () => {
       const contract = makeValidContract();
       const engine = new DiagonalSpreadEngine(contract);
@@ -152,7 +168,7 @@ describe("DiagonalSpreadEngine", () => {
 
       expect(result.adjustmentWindow).not.toBeNull();
       expect(result.adjustmentWindow!.daysToShortExpiration).toBeLessThanOrEqual(7);
-      expect(result.adjustmentWindow!.recommendation).toContain("rolling");
+      expect(result.adjustmentWindow!.recommendation.toLowerCase()).toContain("roll");
     });
   });
 

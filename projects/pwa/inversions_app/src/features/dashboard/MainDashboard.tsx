@@ -46,6 +46,7 @@ export function MainDashboard() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [simulationRows, setSimulationRows] = useState<ConfluenceSignalRow[] | undefined>(undefined);
   const [simulationVerdict, setSimulationVerdict] = useState<any | null>(null);
+  const [activeSimulationStrategy, setActiveSimulationStrategy] = useState("CALENDAR_SPREAD");
   const { selectedInstrument, selectedSignal: storeSelectedRow } = useSignalStore();
 
   const handleSimulationResult = useCallback((result: SimulationResponse) => {
@@ -238,7 +239,11 @@ export function MainDashboard() {
                       endDate={periodRange?.endDate}
                     />
                   </div>
-                  <SimulationControlPanel ticket={selectedSymbol} onResult={handleSimulationResult} />
+                  <SimulationControlPanel
+                    ticket={selectedSymbol}
+                    onResult={handleSimulationResult}
+                    onStrategyChange={setActiveSimulationStrategy}
+                  />
                   {simulationVerdict && (
                     <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
                       <strong>Verdict derivado:</strong>
@@ -248,7 +253,13 @@ export function MainDashboard() {
                       </span>
                     </div>
                   )}
-                  <ConfluenceSignalsTable symbol={selectedSymbol} rows={simulationRows} />
+                </div>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <ConfluenceSignalsTable
+                    symbol={selectedSymbol}
+                    rows={simulationRows}
+                    activeStrategy={activeSimulationStrategy}
+                  />
                 </div>
               </div>
             ) : null}

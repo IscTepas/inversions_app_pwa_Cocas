@@ -16,7 +16,6 @@ import {
   blackScholesVega,
   interpolateIv,
   daysToExpiration,
-  estimateForwardIv,
 } from "./termUtils";
 
 export type DirectionalProfile = "bullish" | "bearish" | "neutral";
@@ -166,31 +165,31 @@ export class DiagonalSpreadEngine {
   ): GreekSensitivities {
     const shortDelta = blackScholesDelta(
       shortLeg.strike, shortLeg.strike, shortT, this.riskFreeRate, shortIv, optionStyle
-    );
+    ) * shortLeg.contracts;
     const longDelta = blackScholesDelta(
       longLeg.strike, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle
-    );
+    ) * longLeg.contracts;
 
     const shortGamma = blackScholesGamma(
       shortLeg.strike, shortLeg.strike, shortT, this.riskFreeRate, shortIv, optionStyle
-    );
+    ) * shortLeg.contracts;
     const longGamma = blackScholesGamma(
       longLeg.strike, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle
-    );
+    ) * longLeg.contracts;
 
     const shortThetaVal = blackScholesTheta(
       shortLeg.strike, shortLeg.strike, shortT, this.riskFreeRate, shortIv, optionStyle
-    );
+    ) * shortLeg.contracts;
     const longThetaVal = blackScholesTheta(
       longLeg.strike, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle
-    );
+    ) * longLeg.contracts;
 
     const shortVega = blackScholesVega(
       shortLeg.strike, shortLeg.strike, shortT, this.riskFreeRate, shortIv, optionStyle
-    );
+    ) * shortLeg.contracts;
     const longVega = blackScholesVega(
       longLeg.strike, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle
-    );
+    ) * longLeg.contracts;
 
     return {
       delta: longDelta - shortDelta,
@@ -222,6 +221,7 @@ export class DiagonalSpreadEngine {
     const priceMin = atmStrike * 0.7;
     const priceMax = atmStrike * 1.3;
     const step = atmStrike * 0.02;
+    const entryCost = this.calculateNetEntryCost(shortLeg, longLeg);
 
     for (let price = priceMin; price <= priceMax; price += step) {
       const shortPrice = blackScholesPrice(
@@ -231,37 +231,29 @@ export class DiagonalSpreadEngine {
         price, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle
       );
 
-      const strategyValue = longPrice - shortPrice;
-
-      const atmShortPrice = blackScholesPrice(
-        shortLeg.strike, shortLeg.strike, shortT, this.riskFreeRate, shortIv, optionStyle
-      );
-      const atmLongPrice = blackScholesPrice(
-        longLeg.strike, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle
-      );
-      const initialValue = atmLongPrice - atmShortPrice;
-      const pnl = strategyValue - initialValue;
+      const strategyValue = this.calculatePositionValue(shortLeg, longLeg, shortPrice, longPrice);
+      const pnl = strategyValue - entryCost;
 
       const delta = blackScholesDelta(
         price, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle
-      ) - blackScholesDelta(
+      ) * longLeg.contracts - blackScholesDelta(
         price, shortLeg.strike, shortT, this.riskFreeRate, shortIv, optionStyle
-      );
+      ) * shortLeg.contracts;
       const gamma = blackScholesGamma(
         price, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle
-      ) - blackScholesGamma(
+      ) * longLeg.contracts - blackScholesGamma(
         price, shortLeg.strike, shortT, this.riskFreeRate, shortIv, optionStyle
-      );
+      ) * shortLeg.contracts;
       const theta = blackScholesTheta(
         price, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle
-      ) - blackScholesTheta(
+      ) * longLeg.contracts - blackScholesTheta(
         price, shortLeg.strike, shortT, this.riskFreeRate, shortIv, optionStyle
-      );
+      ) * shortLeg.contracts;
       const vega = blackScholesVega(
         price, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle
-      ) - blackScholesVega(
+      ) * longLeg.contracts - blackScholesVega(
         price, shortLeg.strike, shortT, this.riskFreeRate, shortIv, optionStyle
-      );
+      ) * shortLeg.contracts;
 
       scenarios.push({
         underlyingPrice: Math.round(price * 100) / 100,
@@ -279,7 +271,7 @@ export class DiagonalSpreadEngine {
     return scenarios;
   }
 
-  /** Genera perfil de theta decay a lo largo del tiempo (DTE decreciente de 5 en 5). Despues de expiracion corta, solo queda la pata larga. Las T usan el DTE remanente real = original - dias transcurridos */
+  /** Genera perfil de theta decay a lo largo del tiempo (DTE decreciente de 5 en 5). Despues de expiracion corta, solo queda la pata larga. P&L calculado contra primas reales. */
   private generateThetaDecayProfile(
     shortLeg: TermLeg,
     longLeg: TermLeg,
@@ -291,6 +283,7 @@ export class DiagonalSpreadEngine {
   ): DiagonalScenario[] {
     const scenarios: DiagonalScenario[] = [];
     const atmStrike = shortLeg.strike;
+    const entryCost = this.calculateNetEntryCost(shortLeg, longLeg);
 
     for (let longRemaining = longDte; longRemaining >= 1; longRemaining -= 5) {
       const shortRemaining = Math.max(0, shortDte - (longDte - longRemaining));
@@ -301,25 +294,25 @@ export class DiagonalSpreadEngine {
         const longPrice = blackScholesPrice(
           atmStrike, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle
         );
-        const strategyValue = longPrice;
+        const strategyValue = longPrice * longLeg.contracts;
 
         const delta = blackScholesDelta(
           atmStrike, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle
-        );
+        ) * longLeg.contracts;
         const gamma = blackScholesGamma(
           atmStrike, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle
-        );
+        ) * longLeg.contracts;
         const thetaTerm = blackScholesTheta(
           atmStrike, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle
-        );
+        ) * longLeg.contracts;
         const vega = blackScholesVega(
           atmStrike, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle
-        );
+        ) * longLeg.contracts;
 
         scenarios.push({
           underlyingPrice: atmStrike,
           strategyValue: Math.round(strategyValue * 100) / 100,
-          pnl: 0,
+          pnl: Math.round((strategyValue - entryCost) * 100) / 100,
           greeks: {
             delta: Math.round(delta * 1000) / 1000,
             gamma: Math.round(gamma * 1000) / 1000,
@@ -337,33 +330,33 @@ export class DiagonalSpreadEngine {
         const longPrice = blackScholesPrice(
           atmStrike, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle
         );
-        const strategyValue = longPrice - shortPrice;
+        const strategyValue = this.calculatePositionValue(shortLeg, longLeg, shortPrice, longPrice);
 
         const delta = blackScholesDelta(
           atmStrike, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle
-        ) - blackScholesDelta(
+        ) * longLeg.contracts - blackScholesDelta(
           atmStrike, shortLeg.strike, shortT, this.riskFreeRate, shortIv, optionStyle
-        );
+        ) * shortLeg.contracts;
         const gamma = blackScholesGamma(
           atmStrike, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle
-        ) - blackScholesGamma(
+        ) * longLeg.contracts - blackScholesGamma(
           atmStrike, shortLeg.strike, shortT, this.riskFreeRate, shortIv, optionStyle
-        );
+        ) * shortLeg.contracts;
         const thetaTerm = blackScholesTheta(
           atmStrike, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle
-        ) - blackScholesTheta(
+        ) * longLeg.contracts - blackScholesTheta(
           atmStrike, shortLeg.strike, shortT, this.riskFreeRate, shortIv, optionStyle
-        );
+        ) * shortLeg.contracts;
         const vega = blackScholesVega(
           atmStrike, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle
-        ) - blackScholesVega(
+        ) * longLeg.contracts - blackScholesVega(
           atmStrike, shortLeg.strike, shortT, this.riskFreeRate, shortIv, optionStyle
-        );
+        ) * shortLeg.contracts;
 
         scenarios.push({
           underlyingPrice: atmStrike,
           strategyValue: Math.round(strategyValue * 100) / 100,
-          pnl: 0,
+          pnl: Math.round((strategyValue - entryCost) * 100) / 100,
           greeks: {
             delta: Math.round(delta * 1000) / 1000,
             gamma: Math.round(gamma * 1000) / 1000,
@@ -390,6 +383,7 @@ export class DiagonalSpreadEngine {
     const scenarios: DiagonalScenario[] = [];
     const ivShocks = [-0.1, -0.05, -0.02, 0, 0.02, 0.05, 0.1];
     const atmStrike = shortLeg.strike;
+    const entryCost = this.calculateNetEntryCost(shortLeg, longLeg);
 
     for (const shock of ivShocks) {
       const shortIv = Math.max(0.05, baseShortIv + shock);
@@ -402,16 +396,8 @@ export class DiagonalSpreadEngine {
         atmStrike, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle
       );
 
-      const strategyValue = longPrice - shortPrice;
-
-      const baseShortPrice = blackScholesPrice(
-        atmStrike, shortLeg.strike, shortT, this.riskFreeRate, baseShortIv, optionStyle
-      );
-      const baseLongPrice = blackScholesPrice(
-        atmStrike, longLeg.strike, longT, this.riskFreeRate, baseLongIv, optionStyle
-      );
-      const baseValue = baseLongPrice - baseShortPrice;
-      const pnl = strategyValue - baseValue;
+      const strategyValue = this.calculatePositionValue(shortLeg, longLeg, shortPrice, longPrice);
+      const pnl = strategyValue - entryCost;
 
       const shortVega = blackScholesVega(
         atmStrike, shortLeg.strike, shortT, this.riskFreeRate, shortIv, optionStyle
@@ -428,7 +414,7 @@ export class DiagonalSpreadEngine {
           delta: 0,
           gamma: 0,
           theta: 0,
-          vega: Math.round((longVega - shortVega) * 100) / 100,
+          vega: Math.round((longVega * longLeg.contracts - shortVega * shortLeg.contracts) * 100) / 100,
         },
       });
     }
@@ -450,11 +436,11 @@ export class DiagonalSpreadEngine {
     }
 
     const reasons: string[] = [];
-    if (approachingExpiration) reasons.push(`Short expiration in ${shortDte} days`);
-    if (lowThetaResidual) reasons.push(`Theta residual (${Math.round(Math.abs(greeks.theta) * 100) / 100}) below threshold (${this.thetaResidualThreshold})`);
-    if (highGammaExposure) reasons.push(`Gamma exposure (${Math.round(greeks.gamma * 1000) / 1000}) exceeds threshold (0.05)`);
+    if (approachingExpiration) reasons.push(`Expiración corta en ${shortDte} días`);
+    if (lowThetaResidual) reasons.push(`Theta residual (${Math.round(Math.abs(greeks.theta) * 100) / 100}) por debajo del umbral (${this.thetaResidualThreshold})`);
+    if (highGammaExposure) reasons.push(`Exposición gamma (${Math.round(greeks.gamma * 1000) / 1000}) supera el umbral (0.05)`);
 
-    const recommendation = `Consider rolling: ${reasons.join("; ")}.`;
+    const recommendation = `Considerar roll: ${reasons.join("; ")}.`;
 
     return {
       daysToShortExpiration: shortDte,
@@ -476,15 +462,11 @@ export class DiagonalSpreadEngine {
     optionStyle: OptionStyle
   ): DiagonalStressTest[] {
     const atm = shortLeg.strike;
-    const forwardIv = estimateForwardIv(baseShortIv, baseLongIv, shortT, longT);
-
-    const atmShortPrice = blackScholesPrice(atm, shortLeg.strike, shortT, this.riskFreeRate, baseShortIv, optionStyle);
-    const atmLongPrice = blackScholesPrice(atm, longLeg.strike, longT, this.riskFreeRate, baseLongIv, optionStyle);
-    const initialValue = atmLongPrice - atmShortPrice;
+    const entryCost = this.calculateNetEntryCost(shortLeg, longLeg);
 
     const tests: Array<{ label: string; description: string; price: number; shortIvMult: number; longIvMult: number }> = [
-      { label: "Market Crash",      description: "Underying drops 20%, IV spikes +50%", price: atm * 0.8,  shortIvMult: 1.5, longIvMult: 1.5 },
-      { label: "Sharp Rally",       description: "Underying jumps 15%, IV drops 20%", price: atm * 1.15, shortIvMult: 0.8, longIvMult: 0.8 },
+      { label: "Market Crash",      description: "Underlying drops 20%, IV spikes +50%", price: atm * 0.8,  shortIvMult: 1.5, longIvMult: 1.5 },
+      { label: "Sharp Rally",       description: "Underlying jumps 15%, IV drops 20%", price: atm * 1.15, shortIvMult: 0.8, longIvMult: 0.8 },
       { label: "IV Expansion",      description: "IV expands +50% across all tenors",  price: atm,        shortIvMult: 1.5, longIvMult: 1.5 },
       { label: "IV Contraction",    description: "IV contracts 30% across all tenors",price: atm,        shortIvMult: 0.7, longIvMult: 0.7 },
       { label: "Volatility Spike",  description: "Short IV spikes +80%, long IV +30%",price: atm,        shortIvMult: 1.8, longIvMult: 1.3 },
@@ -495,17 +477,21 @@ export class DiagonalSpreadEngine {
       const longIv = Math.max(0.05, baseLongIv * t.longIvMult);
       const shortP = blackScholesPrice(t.price, shortLeg.strike, shortT, this.riskFreeRate, shortIv, optionStyle);
       const longP = blackScholesPrice(t.price, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle);
-      const strategyValue = longP - shortP;
-      const pnl = strategyValue - initialValue;
+      const strategyValue = this.calculatePositionValue(shortLeg, longLeg, shortP, longP);
+      const pnl = strategyValue - entryCost;
 
       const delta = blackScholesDelta(t.price, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle)
-        - blackScholesDelta(t.price, shortLeg.strike, shortT, this.riskFreeRate, shortIv, optionStyle);
+        * longLeg.contracts - blackScholesDelta(t.price, shortLeg.strike, shortT, this.riskFreeRate, shortIv, optionStyle)
+        * shortLeg.contracts;
       const gamma = blackScholesGamma(t.price, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle)
-        - blackScholesGamma(t.price, shortLeg.strike, shortT, this.riskFreeRate, shortIv, optionStyle);
+        * longLeg.contracts - blackScholesGamma(t.price, shortLeg.strike, shortT, this.riskFreeRate, shortIv, optionStyle)
+        * shortLeg.contracts;
       const theta = blackScholesTheta(t.price, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle)
-        - blackScholesTheta(t.price, shortLeg.strike, shortT, this.riskFreeRate, shortIv, optionStyle);
+        * longLeg.contracts - blackScholesTheta(t.price, shortLeg.strike, shortT, this.riskFreeRate, shortIv, optionStyle)
+        * shortLeg.contracts;
       const vega = blackScholesVega(t.price, longLeg.strike, longT, this.riskFreeRate, longIv, optionStyle)
-        - blackScholesVega(t.price, shortLeg.strike, shortT, this.riskFreeRate, shortIv, optionStyle);
+        * longLeg.contracts - blackScholesVega(t.price, shortLeg.strike, shortT, this.riskFreeRate, shortIv, optionStyle)
+        * shortLeg.contracts;
 
       return {
         label: t.label,
@@ -526,6 +512,19 @@ export class DiagonalSpreadEngine {
   }
 
   /** Retorna el contrato. Usado por termSimulationEngine y routes */
+  private calculatePositionValue(
+    shortLeg: TermLeg,
+    longLeg: TermLeg,
+    shortPrice: number,
+    longPrice: number
+  ): number {
+    return longPrice * longLeg.contracts - shortPrice * shortLeg.contracts;
+  }
+
+  private calculateNetEntryCost(shortLeg: TermLeg, longLeg: TermLeg): number {
+    return longLeg.premium * longLeg.contracts - shortLeg.premium * shortLeg.contracts;
+  }
+
   getContract(): TermStrategyContract {
     return this.contract;
   }

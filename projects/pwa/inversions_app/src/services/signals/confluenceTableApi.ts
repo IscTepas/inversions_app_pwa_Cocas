@@ -125,6 +125,8 @@ export async function runSimulation(payload: SimulationRequestPayload): Promise<
 }
 
 export const CANONICAL_ESTRATEGIAS = [
+  "CALENDAR_SPREAD",
+  "DIAGONAL_SPREAD",
   "IRON_CONDOR",
   "BULL_CALL_SPREAD",
   "BEAR_PUT_SPREAD",

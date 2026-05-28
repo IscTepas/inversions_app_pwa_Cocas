@@ -17,6 +17,7 @@ import { ExecuteSimulationButton } from "./ExecuteSimulationButton";
 interface Props {
   ticket: string;
   onResult: (result: SimulationResponse) => void;
+  onStrategyChange?: (strategy: string) => void;
 }
 
 type Preset = "2A" | "1A" | "6M" | "3M" | "1M";
@@ -31,12 +32,52 @@ function isoPlusDays(days: number): string {
   return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
 }
 
-export function SimulationControlPanel({ ticket, onResult }: Props) {
+function isTermStrategy(strategy: string) {
+  return strategy === "CALENDAR_SPREAD" || strategy === "DIAGONAL_SPREAD";
+}
+
+interface TermApiParams {
+  optionStyle: "call" | "put";
+  strike: string;
+  strikeShort: string;
+  strikeLong: string;
+  expirationShort: string;
+  expirationLong: string;
+  premiumShort: string;
+  premiumLong: string;
+  contracts: string;
+  riskFreeRate: string;
+}
+
+function termEndpointFor(strategy: string, optionStyle: "call" | "put") {
+  if (strategy === "CALENDAR_SPREAD") {
+    return `/api/v1/strategies/term/calendar/${optionStyle}`;
+  }
+  if (strategy === "DIAGONAL_SPREAD") {
+    return "/api/v1/strategies/term/diagonal";
+  }
+  return "/api/simulation/run";
+}
+
+export function SimulationControlPanel({ ticket, onResult, onStrategyChange }: Props) {
   const [preset, setPreset] = useState<Preset>("3M");
   const [estrategiaFrom, setEstrategiaFrom] = useState(isoToday());
   const [estrategiaTo, setEstrategiaTo] = useState(isoPlusDays(30));
   const [temporalidad, setTemporalidad] = useState<"1m" | "5m" | "15m" | "1h" | "4h" | "1d">("1h");
-  const [estrategia, setEstrategia] = useState("IRON_CONDOR");
+  const [estrategia, setEstrategia] = useState("CALENDAR_SPREAD");
+  const [paramsOpen, setParamsOpen] = useState(false);
+  const [termParams, setTermParams] = useState<TermApiParams>({
+    optionStyle: "call",
+    strike: "100",
+    strikeShort: "95",
+    strikeLong: "105",
+    expirationShort: isoPlusDays(23),
+    expirationLong: isoPlusDays(113),
+    premiumShort: "2.50",
+    premiumLong: "5.00",
+    contracts: "1",
+    riskFreeRate: "0.05"
+  });
   const [tolerancia, setTolerancia] = useState<"BAJO" | "MEDIO" | "ALTO">("MEDIO");
   const [coresOn, setCoresOn] = useState<Record<CoreId, boolean>>(
     ALL_CORES.reduce((acc, c) => ({ ...acc, [c]: true }), {} as Record<CoreId, boolean>)
@@ -49,6 +90,14 @@ export function SimulationControlPanel({ ticket, onResult }: Props) {
 
   const toggleCore = (c: CoreId) => setCoresOn((prev) => ({ ...prev, [c]: !prev[c] }));
   const toggleSub = (s: SubCoreIndicador) => setIndicadoresOn((prev) => ({ ...prev, [s]: !prev[s] }));
+  const handleStrategyChange = (next: string) => {
+    setEstrategia(next);
+    onStrategyChange?.(next);
+    if (isTermStrategy(next)) setParamsOpen(true);
+  };
+  const updateTermParam = (key: keyof TermApiParams, value: string) => {
+    setTermParams((prev) => ({ ...prev, [key]: value }));
+  };
 
   const run = async () => {
     setLoading(true);
@@ -99,8 +148,31 @@ export function SimulationControlPanel({ ticket, onResult }: Props) {
             {TIMEFRAMES.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
         </label>
-        <StrategySelector value={estrategia} onChange={setEstrategia} />
+        <StrategySelector value={estrategia} onChange={handleStrategyChange} />
         <RiskToleranceToggle value={tolerancia} onChange={setTolerancia} />
+      </div>
+
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: "0.75rem",
+        border: "1px solid var(--color-border)",
+        borderRadius: "var(--radius-sm)",
+        padding: "0.65rem 0.75rem",
+        background: "var(--color-surface-raised)"
+      }}>
+        <div>
+          <strong style={{ fontSize: "0.85rem" }}>Estrategia activa: {estrategia.replace(/_/g, " ")}</strong>
+          <p style={{ margin: "0.15rem 0 0", fontSize: "0.75rem" }}>
+            {isTermStrategy(estrategia)
+              ? "TEAM-09: revisar parametros antes de ejecutar o validar en el modulo term."
+              : "Estrategia canonica general de simulacion."}
+          </p>
+        </div>
+        <button className="btn-ghost" type="button" onClick={() => setParamsOpen(true)}>
+          ☰ Parametros API
+        </button>
       </div>
 
       <fieldset style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "0.5rem 0.75rem" }}>
@@ -132,6 +204,116 @@ export function SimulationControlPanel({ ticket, onResult }: Props) {
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <ExecuteSimulationButton loading={loading} onClick={run} />
       </div>
+
+      {paramsOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.48)",
+            zIndex: 40,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem"
+          }}
+          onClick={() => setParamsOpen(false)}
+        >
+          <div
+            className="card"
+            style={{
+              width: "min(760px, 96vw)",
+              maxHeight: "88vh",
+              overflowY: "auto",
+              boxShadow: "0 24px 56px rgba(0,0,0,0.45)"
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
+              <div>
+                <h2 style={{ margin: 0 }}>Parametros API TEAM-09</h2>
+                <p style={{ marginTop: "0.25rem", fontSize: "0.8rem" }}>
+                  {estrategia.replace(/_/g, " ")} · {termParams.optionStyle.toUpperCase()}
+                </p>
+              </div>
+              <button className="btn-ghost" type="button" onClick={() => setParamsOpen(false)}>Cerrar</button>
+            </div>
+
+            {isTermStrategy(estrategia) ? (
+              <div style={{ display: "grid", gap: "1rem" }}>
+                <div style={{ border: "1px solid var(--color-accent)", borderRadius: "var(--radius-sm)", padding: "0.75rem", background: "rgba(56,139,253,0.08)" }}>
+                  <strong>Endpoint usado por TEAM-09</strong>
+                  <p style={{ marginTop: "0.35rem", fontSize: "0.8rem" }}>
+                    <code>{termEndpointFor(estrategia, termParams.optionStyle)}</code>
+                  </p>
+                </div>
+
+                <div style={{ display: "grid", gap: "0.75rem", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+                  <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.75rem" }}>
+                    <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase" }}>Tipo</span>
+                    <select value={termParams.optionStyle} onChange={(e) => updateTermParam("optionStyle", e.target.value as "call" | "put")}>
+                      <option value="call">Call</option>
+                      <option value="put">Put</option>
+                    </select>
+                  </label>
+
+                  {estrategia === "CALENDAR_SPREAD" ? (
+                    <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.75rem" }}>
+                      <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase" }}>Strike comun</span>
+                      <input value={termParams.strike} onChange={(e) => updateTermParam("strike", e.target.value)} />
+                    </label>
+                  ) : (
+                    <>
+                      <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.75rem" }}>
+                        <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase" }}>Strike corto</span>
+                        <input value={termParams.strikeShort} onChange={(e) => updateTermParam("strikeShort", e.target.value)} />
+                      </label>
+                      <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.75rem" }}>
+                        <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase" }}>Strike largo</span>
+                        <input value={termParams.strikeLong} onChange={(e) => updateTermParam("strikeLong", e.target.value)} />
+                      </label>
+                    </>
+                  )}
+
+                  <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.75rem" }}>
+                    <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase" }}>Expiracion corta</span>
+                    <input type="date" value={termParams.expirationShort} onChange={(e) => updateTermParam("expirationShort", e.target.value)} />
+                  </label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.75rem" }}>
+                    <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase" }}>Expiracion larga</span>
+                    <input type="date" value={termParams.expirationLong} onChange={(e) => updateTermParam("expirationLong", e.target.value)} />
+                  </label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.75rem" }}>
+                    <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase" }}>Prima corta</span>
+                    <input value={termParams.premiumShort} onChange={(e) => updateTermParam("premiumShort", e.target.value)} />
+                  </label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.75rem" }}>
+                    <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase" }}>Prima larga</span>
+                    <input value={termParams.premiumLong} onChange={(e) => updateTermParam("premiumLong", e.target.value)} />
+                  </label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.75rem" }}>
+                    <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase" }}>Contratos</span>
+                    <input value={termParams.contracts} onChange={(e) => updateTermParam("contracts", e.target.value)} />
+                  </label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.75rem" }}>
+                    <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase" }}>Risk free rate</span>
+                    <input value={termParams.riskFreeRate} onChange={(e) => updateTermParam("riskFreeRate", e.target.value)} />
+                  </label>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                  <button className="btn-ghost" type="button" onClick={() => setParamsOpen(false)}>Cancelar</button>
+                  <button className="btn-primary" type="button" onClick={() => setParamsOpen(false)}>Guardar parametros</button>
+                </div>
+              </div>
+            ) : (
+              <p>Esta estrategia usa el flujo canonico de simulacion general y no requiere parametros term adicionales.</p>
+            )}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
