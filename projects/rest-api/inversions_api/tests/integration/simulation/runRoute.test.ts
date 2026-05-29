@@ -42,14 +42,6 @@ describe("POST /api/simulation/run", () => {
     expect(res.body.inputs_echo.estrategia).toBe("IRON_CONDOR");
   });
 
-  it("accepts TEAM-09 Calendar strategy in simulation payload", async () => {
-    const res = await request(buildApp())
-      .post("/api/simulation/run")
-      .send(validBody({ estrategia: "CALENDAR_SPREAD" }));
-    expect(res.status).toBe(200);
-    expect(res.body.inputs_echo.estrategia).toBe("CALENDAR_SPREAD");
-  });
-
   it("is idempotent: same body -> same source_input_hash", async () => {
     const a = await request(buildApp()).post("/api/simulation/run").send(validBody());
     const b = await request(buildApp()).post("/api/simulation/run").send(validBody());

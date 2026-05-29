@@ -3,6 +3,8 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useSignalStore, type SelectedSignal } from "../../store/signals";
+import { useAppShellStore } from "../../store/appShell";
+import { useInstitutionalStore, getNearestZone } from "../../store/institutional";
 import {
   getConfluenceTable,
   type ConfluenceSignalRow,
@@ -10,23 +12,24 @@ import {
 } from "../../services/signals/confluenceTableApi";
 import { ObservationCell } from "./ObservationCell";
 import { OptionGreeksRow } from "./OptionGreeksRow";
+import { InstitutionalDetailModal } from "../institutional/InstitutionalDetailModal";
 
 // FIC: Columnas con ancho estable; la tabla se desplaza horizontalmente antes de aplastar texto.
 const TABLE_COLUMNS: Array<{ key: keyof ConfluenceSignalRow | "estrategia" | "observacion"; label: string; width: number }> = [
-  { key: "ticket", label: "TICKET", width: 76 },
-  { key: "core", label: "CORE", width: 150 },
-  { key: "subCore", label: "SUBCORE", width: 110 },
-  { key: "precio", label: "PRECIO", width: 96 },
+  { key: "ticket",    label: "TICKET",     width: 76  },
+  { key: "core",      label: "CORE",       width: 150 },
+  { key: "subCore",   label: "SUBCORE",    width: 110 },
+  { key: "precio",    label: "PRECIO",     width: 96  },
   { key: "tipoSenal", label: "TIPO SEÑAL", width: 108 },
-  { key: "fecha", label: "FECHA", width: 110 },
-  { key: "timeframe", label: "TIMEFRAME", width: 112 },
-  { key: "tendencia", label: "TENDENCIA", width: 128 },
-  { key: "score", label: "SCORE", width: 86 },
-  { key: "peso", label: "PESO", width: 82 },
-  { key: "invertir", label: "INVERTIR", width: 96 },
-  { key: "estado", label: "ESTADO", width: 118 },
-  { key: "estrategia", label: "ESTRATEGIA", width: 170 },
-  { key: "observacion", label: "OBSERVACION", width: 360 }
+  { key: "fecha",     label: "FECHA",      width: 110 },
+  { key: "timeframe", label: "TIMEFRAME",  width: 112 },
+  { key: "tendencia", label: "TENDENCIA",  width: 128 },
+  { key: "score",     label: "SCORE",      width: 86  },
+  { key: "peso",      label: "PESO",       width: 82  },
+  { key: "invertir",  label: "INVERTIR",   width: 96  },
+  { key: "estado",    label: "ESTADO",     width: 118 },
+  { key: "estrategia",label: "ESTRATEGIA", width: 170 },
+  { key: "observacion",label: "OBSERVACION",width: 360 }
 ];
 
 interface Props {
@@ -54,7 +57,12 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
   const [error, setError] = useState<string | null>(null);
   const [meta, setMeta] = useState<Omit<ConfluenceTableResponse, "rows"> | null>(null);
   const [detailRow, setDetailRow] = useState<ConfluenceSignalRow | null>(null);
+  const [modalTicker, setModalTicker] = useState<string | null>(null);
+
   const { setSelectedSignal } = useSignalStore();
+  const { analysisCategory } = useAppShellStore();
+  const { results: institutionalResults } = useInstitutionalStore();
+  const showInstitutionalColumns = analysisCategory === "institutional";
 
   useEffect(() => {
     if (rowsProp) {
@@ -82,6 +90,8 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
     const order = ["A_INDICADORES", "A_FUNDAMENTAL", "A_TECNICO", "A_INSTITUCIONAL", "A_NOTICIAS", "A_IA"];
     return [...rows].sort((a, b) => order.indexOf(a.core) - order.indexOf(b.core));
   }, [rows]);
+
+  const totalCols = TABLE_COLUMNS.length + (showInstitutionalColumns ? 4 : 0);
 
   return (
     <section className="card" style={{ overflow: "hidden" }}>
@@ -116,22 +126,43 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
                   {col.label}
                 </th>
               ))}
+              {showInstitutionalColumns && (
+                <>
+                  <th style={{ position: "sticky", top: 0, background: "var(--color-surface, #14171c)", padding: "0.72rem 0.8rem", textAlign: "left", fontSize: "0.68rem", borderBottom: "1px solid var(--color-border)", color: "var(--color-accent)", width: 96 }}>INST. SCORE</th>
+                  <th style={{ position: "sticky", top: 0, background: "var(--color-surface, #14171c)", padding: "0.72rem 0.8rem", textAlign: "left", fontSize: "0.68rem", borderBottom: "1px solid var(--color-border)", color: "var(--color-accent)", width: 110 }}>TREND</th>
+                  <th style={{ position: "sticky", top: 0, background: "var(--color-surface, #14171c)", padding: "0.72rem 0.8rem", textAlign: "left", fontSize: "0.68rem", borderBottom: "1px solid var(--color-border)", color: "var(--color-accent)", width: 140 }}>ZONA CERCANA</th>
+                  <th style={{ position: "sticky", top: 0, background: "var(--color-surface, #14171c)", padding: "0.72rem 0.8rem", textAlign: "left", fontSize: "0.68rem", borderBottom: "1px solid var(--color-border)", color: "var(--color-accent)", width: 86 }}>DÍAS OPEX</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody>
             {loading && rows.length === 0 ? (
-              <tr><td colSpan={TABLE_COLUMNS.length} style={{ padding: "1rem", textAlign: "center" }}>Cargando…</td></tr>
+              <tr><td colSpan={totalCols} style={{ padding: "1rem", textAlign: "center" }}>Cargando…</td></tr>
             ) : sorted.length === 0 ? (
-              <tr><td colSpan={TABLE_COLUMNS.length} style={{ padding: "1rem", textAlign: "center", color: "var(--color-text-muted)" }}>Sin datos para mostrar</td></tr>
+              <tr><td colSpan={totalCols} style={{ padding: "1rem", textAlign: "center", color: "var(--color-text-muted)" }}>Sin datos para mostrar</td></tr>
             ) : (
               sorted.flatMap((row, idx) => {
                 const rowKey = `${row.core}-${row.subCore ?? "agg"}-${idx}`;
-                const onClick = () =>
-                  setSelectedSignal({
-                    id: rowKey,
-                    symbol: row.ticket,
-                    metadata: { evidencia_refs: row.evidencia_refs, core: row.core, subCore: row.subCore }
-                  } as SelectedSignal);
+                const instData = institutionalResults[row.ticket?.toUpperCase() ?? ""];
+                const onClick = () => {
+                  if (showInstitutionalColumns && instData) {
+                    setModalTicker(row.ticket ?? null);
+                  } else {
+                    setSelectedSignal({
+                      id: rowKey,
+                      symbol: row.ticket,
+                      metadata: { evidencia_refs: row.evidencia_refs, core: row.core, subCore: row.subCore }
+                    } as SelectedSignal);
+                  }
+                };
+
+                const instScore = instData?.zones?.institutionalScore;
+                const trendDir = instData?.trends?.direction;
+                const allZones = instData?.zones?.all ?? [];
+                const nearestZone = getNearestZone(allZones, row.precio ?? 0);
+                const daysToOpex = instData?.expiration?.daysToNextOpex;
+
                 const cells = (
                   <tr key={rowKey} onClick={onClick} style={{ cursor: "pointer", opacity: row.estado === "DEGRADADA" ? 0.62 : 1 }}>
                     {TABLE_COLUMNS.map((col) => {
@@ -178,10 +209,34 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
                         </td>
                       );
                     })}
+                    {showInstitutionalColumns && (
+                      <>
+                        <td style={{ padding: "0.72rem 0.8rem", borderBottom: "1px solid var(--color-border)", fontSize: "0.78rem", verticalAlign: "middle" }}>
+                          {instScore != null ? (
+                            <span style={{ color: instScore >= 0.7 ? "var(--color-buy)" : instScore >= 0.4 ? "var(--color-hold)" : "var(--color-sell)", fontWeight: 600 }}>
+                              {instScore.toFixed(2)}
+                            </span>
+                          ) : "—"}
+                        </td>
+                        <td style={{ padding: "0.72rem 0.8rem", borderBottom: "1px solid var(--color-border)", fontSize: "0.78rem", verticalAlign: "middle" }}>
+                          {trendDir === "bullish" ? "🟢 Bullish" : trendDir === "bearish" ? "🔴 Bearish" : trendDir === "neutral" ? "⚫ Neutral" : "—"}
+                        </td>
+                        <td style={{ padding: "0.72rem 0.8rem", borderBottom: "1px solid var(--color-border)", fontSize: "0.78rem", verticalAlign: "middle" }}>
+                          {nearestZone
+                            ? <span style={{ color: nearestZone.type === "support" ? "var(--color-buy)" : "var(--color-sell)" }}>
+                                ${nearestZone.price.toFixed(2)} ({nearestZone.type === "support" ? "S" : "R"})
+                              </span>
+                            : "—"}
+                        </td>
+                        <td style={{ padding: "0.72rem 0.8rem", borderBottom: "1px solid var(--color-border)", fontSize: "0.78rem", verticalAlign: "middle" }}>
+                          {daysToOpex != null ? `${daysToOpex}d` : "—"}
+                        </td>
+                      </>
+                    )}
                   </tr>
                 );
                 if (row.optionLeg) {
-                  return [cells, <OptionGreeksRow key={`${rowKey}-greeks`} greeks={row.optionLeg} colSpan={TABLE_COLUMNS.length} />];
+                  return [cells, <OptionGreeksRow key={`${rowKey}-greeks`} greeks={row.optionLeg} colSpan={totalCols} />];
                 }
                 return [cells];
               })
@@ -227,16 +282,16 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.7rem", marginBottom: "1rem" }}>
               {[
-                ["Subcore", detailRow.subCore ?? "-"],
-                ["Precio", Number.isFinite(detailRow.precio) ? detailRow.precio.toFixed(3) : "-"],
-                ["Señal", detailRow.tipoSenal],
-                ["Tendencia", detailRow.tendencia],
-                ["Score", detailRow.score.toFixed(3)],
-                ["Peso", detailRow.peso.toFixed(3)],
-                ["Invertir", detailRow.invertir ? "SI" : "NO"],
-                ["Estado", detailRow.estado],
-                ["Fecha", detailRow.fecha],
-                ["Timeframe", detailRow.timeframe],
+                ["Subcore",    detailRow.subCore ?? "-"],
+                ["Precio",     Number.isFinite(detailRow.precio) ? detailRow.precio.toFixed(3) : "-"],
+                ["Señal",      detailRow.tipoSenal],
+                ["Tendencia",  detailRow.tendencia],
+                ["Score",      detailRow.score.toFixed(3)],
+                ["Peso",       detailRow.peso.toFixed(3)],
+                ["Invertir",   detailRow.invertir ? "SI" : "NO"],
+                ["Estado",     detailRow.estado],
+                ["Fecha",      detailRow.fecha],
+                ["Timeframe",  detailRow.timeframe],
                 ["Estrategia", (activeStrategy ?? "N/A").replace(/_/g, " ")]
               ].map(([label, value]) => (
                 <div key={label} style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "0.6rem" }}>
@@ -262,6 +317,13 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
           </div>
         </div>
       )}
+
+      <InstitutionalDetailModal
+        isOpen={modalTicker !== null}
+        onClose={() => setModalTicker(null)}
+        ticker={modalTicker ?? ""}
+        data={modalTicker ? (institutionalResults[modalTicker.toUpperCase()] ?? null) : null}
+      />
     </section>
   );
 }

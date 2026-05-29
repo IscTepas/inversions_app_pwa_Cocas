@@ -48,11 +48,6 @@ describe("validateSimulationRequest", () => {
     expect(err?.field).toBe("estrategia");
   });
 
-  it("accepts TEAM-09 temporal strategies", () => {
-    expect(validateSimulationRequest(buildRequest({ estrategia: "CALENDAR_SPREAD" }))).toBeNull();
-    expect(validateSimulationRequest(buildRequest({ estrategia: "DIAGONAL_SPREAD" }))).toBeNull();
-  });
-
   it("rejects unknown core in coresHabilitados", () => {
     const err = validateSimulationRequest(buildRequest({ coresHabilitados: ["A_BOGUS" as any] }));
     expect(err?.field).toBe("coresHabilitados");

@@ -7,7 +7,7 @@ import type { ChatMessage } from "./types";
 import { ChatMessageList } from "./ChatMessageList";
 import { ChatInputBar } from "./ChatInputBar";
 import { ChatContextBadge } from "./ChatContextBadge";
-import { sendChatMessage } from "../../services/chat/chatApi";
+import { sendChatMessage, sendFundamentalCopilotMessage, sendOptionsAnalysisQA } from "../../services/chat/chatApi";
 import { useSignalStore } from "../../store/signals";
 import { useAppShellStore } from "../../store/appShell";
 
@@ -38,10 +38,15 @@ function saveHistory(messages: ChatMessage[]): void {
   }
 }
 
+function extractTickerFromText(text: string): string | null {
+  const match = text.toUpperCase().match(/\b[A-Z]{1,5}(?:[.=][A-Z])?\b/);
+  return match?.[0] ?? null;
+}
+
 export function ChatPanel() {
   const [messages, setMessages] = useState<ChatMessage[]>(() => loadHistory());
   const [pending, setPending] = useState(false);
-  const { selectedInstrument } = useSignalStore();
+  const { selectedInstrument, selectedOptionsStrategy, optionsStrategyParams } = useSignalStore();
   const { analysisCategory } = useAppShellStore();
 
   // FIC: Persist history to sessionStorage on every change.
@@ -62,6 +67,18 @@ export function ChatPanel() {
     };
     return [systemMsg, ...msgs.slice(msgs.length - TRIM_TO)];
   }, []);
+
+  const conversationHistoryRef = React.useRef<Array<{ role: "user" | "assistant"; content: string }>>([]);
+  const initialLoad = React.useRef(true);
+
+  useEffect(() => {
+    if (initialLoad.current) {
+      initialLoad.current = false;
+      return;
+    }
+    conversationHistoryRef.current = [];
+    setMessages([]);
+  }, [selectedInstrument?.symbol, selectedOptionsStrategy?.name, analysisCategory]);
 
   const handleSend = useCallback(async (text: string) => {
     if (pending) return;
@@ -93,17 +110,54 @@ export function ChatPanel() {
     setPending(true);
 
     try {
-      const response = await sendChatMessage({
-        symbol: context?.symbol ?? "",
-        timeframe: context?.timeframe ?? "1d",
-        question: text,
-        context: context?.analysisCategory,
-      });
+      let responseContent: string;
+
+      const strategyKeyMap: Record<string, string> = {
+        "short-put":  "SHORT_PUT",
+        "long-put":   "LONG_PUT",
+        "short-call": "SHORT_CALL",
+        "long-call":  "LONG_CALL",
+      };
+
+      if (selectedOptionsStrategy && optionsStrategyParams) {
+        const response = await sendOptionsAnalysisQA({
+          ...optionsStrategyParams,
+          question: text,
+          selectedStrategy: strategyKeyMap[selectedOptionsStrategy.id],
+        });
+        responseContent = response.answer;
+      } else if (analysisCategory === "fundamental") {
+        const ticker = selectedInstrument?.symbol ?? extractTickerFromText(text);
+        if (!ticker) {
+          throw new Error("Selecciona una empresa o escribe el ticker en tu pregunta para analizar fundamentales.");
+        }
+        const history = conversationHistoryRef.current;
+        const response = await sendFundamentalCopilotMessage({
+          ticker,
+          question: text,
+          strategy: selectedOptionsStrategy?.name,
+          conversationHistory: history,
+        });
+        responseContent = response.answer;
+        conversationHistoryRef.current = [
+          ...history,
+          { role: "user", content: text },
+          { role: "assistant", content: response.answer },
+        ];
+      } else {
+        const response = await sendChatMessage({
+          symbol: context?.symbol ?? "",
+          timeframe: context?.timeframe ?? "1d",
+          question: text,
+          context: context?.analysisCategory,
+        });
+        responseContent = response.explanation;
+      }
 
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
-            ? { ...m, content: response.explanation, status: "ok" }
+            ? { ...m, content: responseContent, status: "ok" }
             : m
         )
       );
@@ -123,8 +177,7 @@ export function ChatPanel() {
 
   const handleRetry = useCallback((messageId: string) => {
     const errorMsg = messages.find((m) => m.id === messageId);
-    const preceding = messages.findLast?.((m) => m.role === "user") ??
-      messages.slice().reverse().find((m) => m.role === "user");
+    const preceding = messages.slice().reverse().find((m) => m.role === "user");
     if (preceding) {
       void handleSend(preceding.content);
     } else if (errorMsg) {
@@ -156,11 +209,14 @@ export function ChatPanel() {
           gap: "var(--space-sm)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)" }}>
-          <MessageSquare size={16} style={{ color: "var(--color-accent)", flexShrink: 0 }} />
-          <span style={{ fontWeight: "var(--font-weight-emphasis)", fontSize: "var(--font-size-sm)", color: "var(--color-text)", whiteSpace: "nowrap" }}>
-            Chat IA
-          </span>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)", minWidth: 0 }}>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)", minWidth: 0 }}>
+            <MessageSquare size={16} style={{ color: "var(--color-accent)", flexShrink: 0 }} />
+            <span style={{ fontWeight: "var(--font-weight-emphasis)", fontSize: "var(--font-size-sm)", color: "var(--color-text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              Chat IA
+            </span>
+          </div>
         </div>
         <ChatContextBadge />
       </div>

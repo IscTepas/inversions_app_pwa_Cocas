@@ -27,7 +27,7 @@ describe("appShell store", () => {
     const { result } = renderHook(() => useAppShellStore());
     expect(result.current.activeSection).toBe("watchlist");
     expect(result.current.leftPanelCollapsed).toBe(false);
-    expect(result.current.chatPanelCollapsed).toBe(false);
+
     expect(result.current.analysisCategory).toBe("technical");
   });
 
@@ -47,12 +47,7 @@ describe("appShell store", () => {
     expect(localStorageMock.getItem("inversions.appshell.left-collapsed")).toBe("false");
   });
 
-  it("persiste chatPanelCollapsed en localStorage", async () => {
-    const { useAppShellStore } = await import("./appShell");
-    const { result } = renderHook(() => useAppShellStore());
-    act(() => { result.current.toggleChatPanel(); });
-    expect(localStorageMock.getItem("inversions.appshell.chat-collapsed")).toBe("true");
-  });
+
 
   it("persiste analysisCategory en localStorage", async () => {
     const { useAppShellStore } = await import("./appShell");
@@ -88,7 +83,7 @@ describe("appShell store", () => {
     const { result } = renderHook(() => useAppShellStore());
     expect(result.current.activeSection).toBe("strategies");
     expect(result.current.leftPanelCollapsed).toBe(true);
-    expect(result.current.chatPanelCollapsed).toBe(true);
+
     expect(result.current.analysisCategory).toBe("news");
   });
 });

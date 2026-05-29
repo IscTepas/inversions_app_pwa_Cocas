@@ -12,6 +12,7 @@ vi.mock("../../store/appShell", () => ({
     activeSection: "watchlist",
     leftPanelCollapsed: false,
     setActiveSection: mockSetActiveSection,
+    analysisCategory: "technical",
   }),
 }));
 

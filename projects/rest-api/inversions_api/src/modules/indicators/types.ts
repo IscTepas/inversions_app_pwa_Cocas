@@ -121,7 +121,21 @@ export type MetricKey =
   | "FONDO"
   | "FILING_DATE"
   | "PERIODO"
-  | "MODEL_VERSION";
+  | "MODEL_VERSION"
+  // Institutional metrics (TEAM-05)
+  | "SMA_50"
+  | "SMA_200"
+  | "TREND_STRENGTH"
+  | "CONTINUITY_PROB"
+  | "INST_SCORE"
+  | "SOPORTES"
+  | "RESISTENCIAS"
+  | "ATR"
+  | "DAYS_TO_OPEX"
+  | "THETA"
+  | "GAMMA"
+  | "EXPIRY_BIAS"
+  | "CALL_PUT_SKEW";
 
 // FIC: Observacion estructurada que reemplaza el texto libre de la confluencia v1.
 // FIC: Replaces the free-form metadata bag with a typed observation (FR-020).
