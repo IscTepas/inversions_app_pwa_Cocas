@@ -4,9 +4,11 @@
 import React, { useEffect, useState } from "react";
 import { TrendingUp, TrendingDown, ChevronDown, ChevronUp, Shield, ArrowDown } from "lucide-react";
 import { useSignalStore } from "../../../store/signals";
+import { useAppShellStore } from "../../../store/appShell";
+import type { ConfluenceSignalRow } from "../../../services/signals/confluenceTableApi";
 
-type StrategyId = "short-put" | "long-put" | "short-call" | "long-call";
-type StrategyName = "Short Put" | "Long Put" | "Short Call" | "Long Call";
+type StrategyId = "short-put" | "long-put" | "short-call" | "long-call" | "calendar-spread" | "diagonal-spread";
+type StrategyName = "Short Put" | "Long Put" | "Short Call" | "Long Call" | "Calendar Spread" | "Diagonal Spread";
 
 interface StrategyConfig {
   id: StrategyId;
@@ -16,6 +18,7 @@ interface StrategyConfig {
   riskProfile: "limited" | "unlimited";
   sentiment: "bullish" | "bearish" | "neutral";
   endpoint: string;
+  strategyKind?: "single-leg" | "term-spread";
 }
 
 const STRATEGIES: StrategyConfig[] = [
@@ -27,6 +30,7 @@ const STRATEGIES: StrategyConfig[] = [
     riskProfile: "limited",
     sentiment: "bullish",
     endpoint: "/api/team-03/options/calculate",
+    strategyKind: "single-leg",
   },
   {
     id: "long-put",
@@ -36,6 +40,7 @@ const STRATEGIES: StrategyConfig[] = [
     riskProfile: "limited",
     sentiment: "bearish",
     endpoint: "/api/team-03/options/calculate",
+    strategyKind: "single-leg",
   },
   {
     id: "short-call",
@@ -45,6 +50,7 @@ const STRATEGIES: StrategyConfig[] = [
     riskProfile: "unlimited",
     sentiment: "bearish",
     endpoint: "/api/team-03/options/calculate",
+    strategyKind: "single-leg",
   },
   {
     id: "long-call",
@@ -54,6 +60,27 @@ const STRATEGIES: StrategyConfig[] = [
     riskProfile: "limited",
     sentiment: "bullish",
     endpoint: "/api/team-03/options/calculate",
+    strategyKind: "single-leg",
+  },
+  {
+    id: "calendar-spread",
+    name: "Calendar Spread",
+    icon: <Shield size={16} />,
+    description: "Estructura temporal: misma strike, expiración corta vendida y expiración larga comprada.",
+    riskProfile: "limited",
+    sentiment: "neutral",
+    endpoint: "/api/v1/strategies/term/calendar",
+    strategyKind: "term-spread",
+  },
+  {
+    id: "diagonal-spread",
+    name: "Diagonal Spread",
+    icon: <TrendingUp size={16} />,
+    description: "Estructura temporal con strikes y expiraciones diferentes para sesgo direccional.",
+    riskProfile: "limited",
+    sentiment: "neutral",
+    endpoint: "/api/v1/strategies/term/diagonal",
+    strategyKind: "term-spread",
   },
 ];
 
@@ -68,6 +95,13 @@ interface StrategyForm {
   impliedVolatility: string;
   timeDecayModel: "LINEAR" | "EXPONENTIAL";
   interestRate: string;
+  optionStyle: "call" | "put";
+  longStrikePrice: string;
+  longPremium: string;
+  longExpirationDate: string;
+  riskFreeRate: string;
+  shortIv: string;
+  longIv: string;
 }
 
 interface StrategyResult {
@@ -78,6 +112,7 @@ interface StrategyResult {
     breakeven?: number | string;
     netPremium?: number | string;
   };
+  term?: any;
 }
 
 interface MarketQuoteResponse {
@@ -119,7 +154,8 @@ const FALLBACK_INSTRUMENTS: InstrumentCatalogItem[] = [
 ];
 
 export function StrategiesView() {
-  const { selectedOptionsStrategy, setSelectedInstrument, setSelectedOptionsStrategy, setOptionsStrategyParams } = useSignalStore();
+  const { selectedOptionsStrategy, setSelectedInstrument, setSelectedOptionsStrategy, setOptionsStrategyParams, setTermStrategyRows } = useSignalStore();
+  const { setAnalysisCategory } = useAppShellStore();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [forms, setForms] = useState<Record<string, StrategyForm>>({});
   const [results, setResults] = useState<Record<string, StrategyResult>>({});
@@ -149,6 +185,7 @@ export function StrategiesView() {
     const strategy = STRATEGIES.find((item) => item.id === id);
     if (strategy) {
       setSelectedOptionsStrategy({ id: strategy.id, name: strategy.name });
+      setAnalysisCategory("technical");
     }
     setExpandedId((prev) => (prev === id ? null : id));
   };
@@ -164,7 +201,14 @@ export function StrategiesView() {
       availableCapital: "10000",
       impliedVolatility: "25",
       timeDecayModel: "LINEAR",
-      interestRate: "4"
+      interestRate: "4",
+      optionStyle: "call",
+      longStrikePrice: "",
+      longPremium: "",
+      longExpirationDate: "",
+      riskFreeRate: "0.05",
+      shortIv: "0.25",
+      longIv: "0.30"
     };
 
   const setFormField = (id: string, field: keyof StrategyForm, value: string) => {
@@ -257,11 +301,148 @@ export function StrategiesView() {
     }
   };
 
+
+  const isTermSpread = (strategy: StrategyConfig): boolean => strategy.strategyKind === "term-spread";
+
+  const parsePositiveNumber = (value: string): number | null => {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+
+  const formatApiError = (payload: any, fallback: string): string => {
+    if (Array.isArray(payload?.details) && payload.details.length > 0) {
+      return payload.details
+        .map((detail: any) => detail?.message ?? String(detail))
+        .join(" ");
+    }
+    return payload?.error ?? fallback;
+  };
+
+  const validateTermSpreadForm = (strategy: StrategyConfig, form: StrategyForm): string | null => {
+    const longStrike = strategy.id === "calendar-spread" ? form.strikePrice : form.longStrikePrice;
+    const requiredFields = [
+      [form.ticker.trim(), "ticker"],
+      [form.strikePrice, "strike corto"],
+      [longStrike, strategy.id === "calendar-spread" ? "strike comun" : "strike largo"],
+      [form.premium, "prima corta"],
+      [form.longPremium, "prima larga"],
+      [form.quantity, "cantidad"],
+      [form.expirationDate, "expiracion corta"],
+      [form.longExpirationDate, "expiracion larga"],
+    ];
+    const missing = requiredFields.find(([value]) => !String(value).trim());
+    if (missing) {
+      return `Falta capturar ${missing[1]}.`;
+    }
+
+    if (!parsePositiveNumber(form.strikePrice)) return "El strike corto debe ser mayor a 0.";
+    if (!parsePositiveNumber(longStrike)) return strategy.id === "calendar-spread" ? "El strike comun debe ser mayor a 0." : "El strike largo debe ser mayor a 0.";
+    if (!parsePositiveNumber(form.premium)) return "La prima corta debe ser mayor a 0.";
+    if (!parsePositiveNumber(form.longPremium)) return "La prima larga debe ser mayor a 0.";
+    if (!parsePositiveNumber(form.quantity)) return "La cantidad de contratos debe ser mayor a 0.";
+
+    const shortExpiration = new Date(form.expirationDate).getTime();
+    const longExpiration = new Date(form.longExpirationDate).getTime();
+    if (!Number.isFinite(shortExpiration)) return "La expiracion corta no tiene un formato valido.";
+    if (!Number.isFinite(longExpiration)) return "La expiracion larga no tiene un formato valido.";
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (shortExpiration < today.getTime()) return "La expiracion corta no puede estar en el pasado.";
+    if (longExpiration <= shortExpiration) return "La expiracion larga debe ser posterior a la expiracion corta.";
+    if ((longExpiration - shortExpiration) / 86_400_000 < 7) return "La expiracion larga debe estar al menos 7 dias despues de la corta.";
+
+    return null;
+  };
+
+  const calculateTermSpread = async (strategy: StrategyConfig, form: StrategyForm) => {
+    const validationError = validateTermSpreadForm(strategy, form);
+    if (validationError) {
+      setErrors((prev) => ({ ...prev, [strategy.id]: validationError }));
+      return;
+    }
+
+    const longStrike = strategy.id === "calendar-spread" ? form.strikePrice : form.longStrikePrice;
+    const shortStrikeValue = Number(form.strikePrice);
+    const longStrikeValue = Number(longStrike);
+    const shortPremiumValue = Number(form.premium);
+    const longPremiumValue = Number(form.longPremium);
+    const contractsValue = Number(form.quantity || 1);
+
+    setLoadingId(strategy.id);
+    setErrors((prev) => ({ ...prev, [strategy.id]: "" }));
+
+    try {
+      const optionStyle = form.optionStyle;
+      const endpoint = `${strategy.endpoint}/${optionStyle}`;
+      const body = {
+        underlying: form.ticker.toUpperCase(),
+        riskFreeRate: Number(form.riskFreeRate || 0.05),
+        ivCurve: [
+          { dte: 30, iv: Number(form.shortIv || 0.25) },
+          { dte: 90, iv: Number(form.longIv || 0.30) }
+        ],
+        legs: [
+          {
+            strike: shortStrikeValue,
+            expiration: form.expirationDate,
+            premium: shortPremiumValue,
+            contracts: contractsValue,
+            optionStyle
+          },
+          {
+            strike: longStrikeValue,
+            expiration: form.longExpirationDate,
+            premium: longPremiumValue,
+            contracts: contractsValue,
+            optionStyle
+          }
+        ]
+      };
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(formatApiError(err, "term_strategy_failed"));
+      }
+
+      const data = await res.json();
+      setResults((prev) => ({ ...prev, [strategy.id]: { term: data } }));
+      setTermStrategyRows([buildTermConfluenceRow(strategy, form, data)]);
+      setOptionsStrategyParams({
+        ticker: form.ticker.toUpperCase(),
+        strikePrice: Number(form.strikePrice),
+        currentPrice: Number(form.currentPrice || form.strikePrice),
+        premiumPerContract: Number(form.premium),
+        numberOfContracts: Number(form.quantity || 1),
+        expirationDate: form.expirationDate,
+        availableCapital: Number(form.availableCapital || 0),
+        assumptions: {
+          impliedVolatility: Number(form.shortIv || 0.25) * 100,
+          timeDecayModel: form.timeDecayModel,
+          interestRate: Number(form.riskFreeRate || 0.05) * 100,
+        },
+      });
+    } catch (err) {
+      setErrors((prev) => ({ ...prev, [strategy.id]: err instanceof Error ? err.message : "Error al calcular estrategia temporal." }));
+    } finally {
+      setLoadingId(null);
+    }
+  };
+
   const calculate = async (strategy: StrategyConfig) => {
     setSelectedOptionsStrategy({ id: strategy.id, name: strategy.name });
     const form = getForm(strategy.id);
     if (form.ticker.trim()) {
       setActiveTickerContext(form.ticker);
+    }
+    if (isTermSpread(strategy)) {
+      await calculateTermSpread(strategy, form);
+      return;
     }
     if (!form.strikePrice || !form.premium || !form.quantity || !form.expirationDate || !form.availableCapital) {
       setErrors((prev) => ({ ...prev, [strategy.id]: "Strike, prima, contratos, expiración y capital son requeridos." }));
@@ -326,7 +507,68 @@ export function StrategiesView() {
   };
 
   const sentimentColor = (s: StrategyConfig["sentiment"]) =>
-    s === "bullish" ? "var(--color-buy)" : s === "bearish" ? "var(--color-sell)" : "var(--color-text-muted)";
+    s === "bullish" ? "var(--color-buy)" : s === "bearish" ? "var(--color-sell)" : "var(--color-accent)";
+
+  const fmtNumber = (value: unknown, digits = 2): string => {
+    const n = typeof value === "number" ? value : Number(value);
+    return Number.isFinite(n) ? n.toFixed(digits) : "—";
+  };
+
+  const buildTermConfluenceRow = (
+    strategy: StrategyConfig,
+    form: StrategyForm,
+    data: any
+  ): ConfluenceSignalRow => {
+    const greeks = data?.analysis?.greeks ?? data?.report?.riskMetrics ?? {};
+    const riskMetrics = data?.report?.riskMetrics ?? {};
+    const theta = Number(data?.analysis?.netTheta ?? greeks.theta ?? riskMetrics.netTheta ?? 0);
+    const delta = Number(greeks.delta ?? riskMetrics.netDelta ?? 0);
+    const pop = Number(riskMetrics.probabilityOfProfit ?? 0);
+    const score = Math.max(0, Math.min(1, pop || 0.5 + Math.max(-0.45, Math.min(0.45, delta))));
+    const nowIso = new Date().toISOString();
+    const signal = form.optionStyle === "put" ? "PUT" : theta > 0 ? "CALL" : "HOLD";
+    const tendencia = delta > 0.15 ? "ALCISTA" : delta < -0.15 ? "BAJISTA" : "LATERAL";
+
+    return {
+      ticket: form.ticker.toUpperCase(),
+      core: "A_IA",
+      subCore: "TEAM-09",
+      precio: Number(form.currentPrice || form.strikePrice || 0),
+      tipoSenal: signal,
+      fecha: nowIso.slice(0, 10),
+      timeframe: "term",
+      tendencia,
+      score: Math.round(score * 1000) / 1000,
+      peso: 1,
+      invertir: theta > 0 && score >= 0.5,
+      estado: "ACTIVA",
+      vigencia: form.longExpirationDate,
+      fuente: "TEAM-09 Calendar/Diagonal",
+      evidencia_refs: [
+        `endpoint:${strategy.endpoint}/${form.optionStyle}`,
+        `shortExp:${form.expirationDate}`,
+        `longExp:${form.longExpirationDate}`,
+      ],
+      ia_revisada: true,
+      disclaimer_id: "RNF-001",
+      delta_vs_anterior: "NUEVA",
+      observacion: {
+        objetivo: `Evaluar ${data?.structureName ?? strategy.name} con estructura temporal TEAM-09.`,
+        senal: `Theta=${fmtNumber(theta)}; Delta=${fmtNumber(delta, 3)}; PoP=${fmtNumber(score * 100, 1)}%.`,
+        explicacion: "Fila derivada del calculo Calendar/Diagonal. Sirve para validacion humana; no autoriza ejecucion.",
+        metricas: {
+          shortDte: data?.analysis?.shortDte ?? "N/A",
+          longDte: data?.analysis?.longDte ?? "N/A",
+          netTheta: fmtNumber(theta),
+          netDelta: fmtNumber(delta, 3),
+          netVega: fmtNumber(greeks.vega ?? riskMetrics.netVega),
+        },
+      },
+      algorithm_version: "TEAM-09-v1",
+      computed_at: nowIso,
+      source_input_hash: `team09-${strategy.id}-${form.ticker}-${form.expirationDate}-${form.longExpirationDate}`,
+    };
+  };
 
   const fmtResult = (v: number | string | undefined): string => {
     if (v == null) return "—";
@@ -466,7 +708,7 @@ export function StrategiesView() {
                     </div>
                   </label>
                   <label style={{ display: "flex", flexDirection: "column", gap: "0.15rem", fontSize: "var(--font-size-xs)" }}>
-                    <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Strike $</span>
+                    <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{isTermSpread(strategy) ? "Strike corto $" : "Strike $"}</span>
                     <input
                       type="number"
                       value={form.strikePrice}
@@ -477,7 +719,7 @@ export function StrategiesView() {
                   </label>
                   <label style={{ display: "flex", flexDirection: "column", gap: "0.15rem", fontSize: "var(--font-size-xs)" }}>
                     <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                      {strategy.id.startsWith("long") ? "Prima pagada $" : "Prima recibida $"}
+                      {isTermSpread(strategy) ? "Prima corta $" : strategy.id.startsWith("long") ? "Prima pagada $" : "Prima recibida $"}
                     </span>
                     <input
                       type="number"
@@ -500,7 +742,7 @@ export function StrategiesView() {
                     />
                   </label>
                   <label style={{ display: "flex", flexDirection: "column", gap: "0.15rem", fontSize: "var(--font-size-xs)" }}>
-                    <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Expiración</span>
+                    <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{isTermSpread(strategy) ? "Exp. corta" : "Expiración"}</span>
                     <input
                       type="date"
                       value={form.expirationDate}
@@ -519,6 +761,30 @@ export function StrategiesView() {
                     />
                   </label>
                 </div>
+
+                {isTermSpread(strategy) && (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.3rem" }}>
+                    <label style={{ display: "flex", flexDirection: "column", gap: "0.15rem", fontSize: "var(--font-size-xs)" }}>
+                      <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Tipo</span>
+                      <select value={form.optionStyle} onChange={(e) => setFormField(strategy.id, "optionStyle", e.target.value)} style={{ fontSize: "var(--font-size-xs)", padding: "0.2rem 0.4rem" }}>
+                        <option value="call">Call</option>
+                        <option value="put">Put</option>
+                      </select>
+                    </label>
+                    <label style={{ display: "flex", flexDirection: "column", gap: "0.15rem", fontSize: "var(--font-size-xs)" }}>
+                      <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Strike largo $</span>
+                      <input type="number" value={strategy.id === "calendar-spread" ? form.strikePrice : form.longStrikePrice} disabled={strategy.id === "calendar-spread"} onChange={(e) => setFormField(strategy.id, "longStrikePrice", e.target.value)} placeholder={strategy.id === "calendar-spread" ? "Mismo strike" : "105"} style={{ fontSize: "var(--font-size-xs)", padding: "0.2rem 0.4rem", opacity: strategy.id === "calendar-spread" ? 0.75 : 1 }} />
+                    </label>
+                    <label style={{ display: "flex", flexDirection: "column", gap: "0.15rem", fontSize: "var(--font-size-xs)" }}>
+                      <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Prima larga $</span>
+                      <input type="number" value={form.longPremium} onChange={(e) => setFormField(strategy.id, "longPremium", e.target.value)} placeholder="5.00" style={{ fontSize: "var(--font-size-xs)", padding: "0.2rem 0.4rem" }} />
+                    </label>
+                    <label style={{ display: "flex", flexDirection: "column", gap: "0.15rem", fontSize: "var(--font-size-xs)" }}>
+                      <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Exp. larga</span>
+                      <input type="date" value={form.longExpirationDate} onChange={(e) => setFormField(strategy.id, "longExpirationDate", e.target.value)} style={{ fontSize: "var(--font-size-xs)", padding: "0.2rem 0.4rem" }} />
+                    </label>
+                  </div>
+                )}
 
                 <details style={{ border: "1px solid var(--color-border-subtle)", borderRadius: "var(--radius-xs)", padding: "0.35rem 0.45rem" }}>
                   <summary style={{ cursor: "pointer", color: "var(--color-text-muted)", fontSize: "var(--font-size-xs)", fontWeight: 700, textTransform: "uppercase" }}>
@@ -550,12 +816,24 @@ export function StrategiesView() {
                       <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Tasa interés %</span>
                       <input
                         type="number"
-                        value={form.interestRate}
-                        onChange={(e) => setFormField(strategy.id, "interestRate", e.target.value)}
-                        placeholder="4"
+                        value={isTermSpread(strategy) ? form.riskFreeRate : form.interestRate}
+                        onChange={(e) => setFormField(strategy.id, isTermSpread(strategy) ? "riskFreeRate" : "interestRate", e.target.value)}
+                        placeholder={isTermSpread(strategy) ? "0.05" : "4"}
                         style={{ fontSize: "var(--font-size-xs)", padding: "0.2rem 0.4rem" }}
                       />
                     </label>
+                    {isTermSpread(strategy) && (
+                      <>
+                        <label style={{ display: "flex", flexDirection: "column", gap: "0.15rem", fontSize: "var(--font-size-xs)" }}>
+                          <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>IV corta</span>
+                          <input type="number" value={form.shortIv} onChange={(e) => setFormField(strategy.id, "shortIv", e.target.value)} placeholder="0.25" style={{ fontSize: "var(--font-size-xs)", padding: "0.2rem 0.4rem" }} />
+                        </label>
+                        <label style={{ display: "flex", flexDirection: "column", gap: "0.15rem", fontSize: "var(--font-size-xs)" }}>
+                          <span style={{ color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>IV larga</span>
+                          <input type="number" value={form.longIv} onChange={(e) => setFormField(strategy.id, "longIv", e.target.value)} placeholder="0.30" style={{ fontSize: "var(--font-size-xs)", padding: "0.2rem 0.4rem" }} />
+                        </label>
+                      </>
+                    )}
                   </div>
                 </details>
 
@@ -581,6 +859,41 @@ export function StrategiesView() {
 
                 {errorMsg && (
                   <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-sell)", margin: 0 }}>{errorMsg}</p>
+                )}
+
+                {result?.term && (
+                  <div style={{ display: "grid", gap: "0.35rem", marginTop: "0.25rem" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.3rem" }}>
+                      {[
+                        ["Estructura", result.term.structureName ?? result.term.strategy],
+                        ["Variante", String(result.term.variant ?? form.optionStyle).toUpperCase()],
+                        ["Theta neta", fmtNumber(result.term.analysis?.netTheta ?? result.term.analysis?.greeks?.theta)],
+                        ["Vega neta", fmtNumber(result.term.analysis?.greeks?.vega ?? result.term.report?.riskMetrics?.netVega)],
+                        ["Delta", fmtNumber(result.term.analysis?.greeks?.delta ?? result.term.report?.riskMetrics?.netDelta, 3)],
+                        ["Gamma", fmtNumber(result.term.analysis?.greeks?.gamma ?? result.term.report?.riskMetrics?.netGamma, 3)],
+                        ["DTE corto", result.term.analysis?.shortDte ?? "—"],
+                        ["DTE largo", result.term.analysis?.longDte ?? "—"],
+                        ["PoP", result.term.report?.riskMetrics?.probabilityOfProfit != null ? `${fmtNumber(result.term.report.riskMetrics.probabilityOfProfit * 100, 1)}%` : "—"],
+                        ["Stress peor", fmtResult(result.term.report?.riskMetrics?.stressTestMaxLoss)],
+                      ].map(([label, value]) => (
+                        <div key={label} style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius-xs)", padding: "0.25rem 0.4rem" }}>
+                          <div style={{ fontSize: "0.6rem", color: "var(--color-text-muted)", fontWeight: 700, textTransform: "uppercase" }}>{label}</div>
+                          <div style={{ fontSize: "var(--font-size-xs)", fontWeight: 800, color: "var(--color-text)" }}>{String(value)}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {Array.isArray(result.term.report?.stressTests) && result.term.report.stressTests.length > 0 && (
+                      <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius-xs)", padding: "0.35rem 0.45rem" }}>
+                        <div style={{ fontSize: "0.6rem", color: "var(--color-text-muted)", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.25rem" }}>Stress tests</div>
+                        {result.term.report.stressTests.slice(0, 3).map((stress: any) => (
+                          <div key={stress.label} style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", fontSize: "0.7rem" }}>
+                            <span>{stress.label}</span>
+                            <strong>{fmtResult(stress.pnl)}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {result?.strategy && (

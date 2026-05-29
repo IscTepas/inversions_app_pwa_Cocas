@@ -2,6 +2,7 @@
 // FIC: Store global ligero para seleccion de senales y modos runtime del dashboard.
 
 import { useSyncExternalStore } from "react";
+import type { ConfluenceSignalRow } from "../services/signals/confluenceTableApi";
 
 export interface SelectedInstrument {
   symbol: string;
@@ -18,8 +19,8 @@ export interface SelectedSignal {
 }
 
 export interface SelectedOptionsStrategy {
-  id: "short-put" | "long-put" | "short-call" | "long-call";
-  name: "Short Put" | "Long Put" | "Short Call" | "Long Call";
+  id: "short-put" | "long-put" | "short-call" | "long-call" | "calendar-spread" | "diagonal-spread";
+  name: "Short Put" | "Long Put" | "Short Call" | "Long Call" | "Calendar Spread" | "Diagonal Spread";
 }
 
 export interface OptionsStrategyParams {
@@ -45,6 +46,7 @@ interface SignalStoreState {
   selectedSignal?: SelectedSignal;
   selectedOptionsStrategy?: SelectedOptionsStrategy;
   optionsStrategyParams?: OptionsStrategyParams;
+  termStrategyRows?: ConfluenceSignalRow[];
   runtimeMode: RuntimeMode;
   operationalMode: OperationalMode;
 }
@@ -106,6 +108,10 @@ export function useSignalStore() {
     },
     setOptionsStrategyParams: (params: OptionsStrategyParams) => {
       state.optionsStrategyParams = params;
+      emit();
+    },
+    setTermStrategyRows: (rows: ConfluenceSignalRow[]) => {
+      state.termStrategyRows = rows;
       emit();
     },
     setRuntimeMode: (mode: RuntimeMode) => {
