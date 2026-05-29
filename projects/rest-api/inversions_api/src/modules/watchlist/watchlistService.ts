@@ -19,6 +19,26 @@ type NewWatchlistItem = Pick<WatchlistItem, "user_id" | "symbol" | "category"> &
 
 const fallbackStore = new Map<string, WatchlistItem[]>();
 
+// FIC: Build default watchlist items from DEFAULT_WATCHLIST_SYMBOLS env var. (EN)
+// FIC: Construye ítems por defecto del watchlist desde la variable de entorno DEFAULT_WATCHLIST_SYMBOLS. (ES)
+function buildDefaultItems(userId: string): WatchlistItem[] {
+  const raw = process.env.DEFAULT_WATCHLIST_SYMBOLS ?? "";
+  if (!raw.trim()) return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean)
+    .map((symbol, idx) => ({
+      id: `default-${symbol.toLowerCase()}`,
+      user_id: userId,
+      symbol,
+      name: symbol,
+      category: "equities",
+      is_favorite: false,
+      created_at: new Date(Date.now() - idx * 1000).toISOString(),
+    }));
+}
+
 function symbolToName(symbol: string): string {
   return symbol.trim().toUpperCase();
 }
@@ -32,13 +52,14 @@ export class WatchlistService {
         .eq("user_id", userId)
         .order("created_at", { ascending: false });
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
-      return (data as WatchlistItem[]) ?? [];
+      const items = (data as WatchlistItem[]) ?? [];
+      // FIC: Return env-configured defaults when user has no saved items. (EN)
+      return items.length > 0 ? items : buildDefaultItems(userId);
     } catch {
-      return fallbackStore.get(userId) ?? [];
+      const local = fallbackStore.get(userId) ?? [];
+      return local.length > 0 ? local : buildDefaultItems(userId);
     }
   }
 

@@ -40,8 +40,8 @@ describe("dashboard components", () => {
       />
     );
 
-    const checkbox = screen.getByRole("checkbox", { name: /Technical/i });
-    fireEvent.click(checkbox);
+    const button = screen.getByRole("button", { name: /Technical/i });
+    fireEvent.click(button);
     expect(onToggle).toHaveBeenCalledWith("tech");
   });
 

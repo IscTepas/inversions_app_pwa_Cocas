@@ -1,9 +1,15 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   AvailabilityDashboard,
   AvailabilitySloService
 } from "../observability/availabilitySlo";
+import {
+  AvailabilityNotificationService,
+  type NotificationConfig,
+  type AvailabilityNotificationPayload
+} from "../services/notificationService";
 
 export interface MonthlyAvailabilityReportResult {
   reportPath: string;
@@ -11,11 +17,14 @@ export interface MonthlyAvailabilityReportResult {
   year: number;
   overallAvailabilityPercent: number;
   sc005Compliant: boolean;
+  supabaseRecordId?: string;
 }
 
 export interface MonthlyAvailabilityReportOptions {
   outputDir?: string;
   format?: "json" | "md";
+  supabaseClient?: SupabaseClient;
+  notificationConfig?: NotificationConfig;
 }
 
 function pad2(value: number): string {
@@ -61,6 +70,26 @@ function renderMarkdown(report: AvailabilityDashboard): string {
   return lines.join("\n");
 }
 
+export interface SupabaseMonthlyAvailabilityRecord {
+  id?: string;
+  month: number;
+  year: number;
+  overall_availability_percent: number;
+  sc005_compliant: boolean;
+  total_samples: number;
+  failed_samples: number;
+  generated_at_utc: string;
+  report_json: AvailabilityDashboard;
+  dependencies_summary: Array<{
+    dependency: string;
+    availability_percent: number;
+    target_percent: number;
+    slo_compliant: boolean;
+    error_budget_remaining_percent: number;
+  }>;
+  created_at?: string;
+}
+
 export class MonthlyAvailabilityReportJob {
   constructor(private readonly availabilitySloService: AvailabilitySloService) {}
 
@@ -80,12 +109,23 @@ export class MonthlyAvailabilityReportJob {
     const extension = format === "md" ? "md" : "json";
     const reportPath = path.join(outputDir, `${fileBaseName}.${extension}`);
 
-    // 🧠 FIC: Persist monthly SLO evidence for audit and operational reviews (EN)
-    // 🧠 FIC: Persistir evidencia mensual de SLO para auditoria y revisiones operativas (ES)
     if (format === "md") {
       await fs.writeFile(reportPath, renderMarkdown(report), "utf8");
     } else {
       await fs.writeFile(reportPath, JSON.stringify(report, null, 2), "utf8");
+    }
+
+    let supabaseRecordId: string | undefined;
+    if (options.supabaseClient) {
+      supabaseRecordId = await this.persistToSupabase(report, options.supabaseClient);
+    }
+
+    if (options.supabaseClient) {
+      await this.auditReportGeneration(year, month, report, options.supabaseClient);
+    }
+
+    if (options.notificationConfig) {
+      await this.notifyStakeholders(report, options.notificationConfig);
     }
 
     return {
@@ -93,7 +133,131 @@ export class MonthlyAvailabilityReportJob {
       month,
       year,
       overallAvailabilityPercent: report.overallAvailabilityPercent,
-      sc005Compliant: report.evidenceBoard.sc005Compliant
+      sc005Compliant: report.evidenceBoard.sc005Compliant,
+      supabaseRecordId
     };
+  }
+
+  private async persistToSupabase(
+    report: AvailabilityDashboard,
+    supabaseClient: SupabaseClient
+  ): Promise<string | undefined> {
+    try {
+      const record: SupabaseMonthlyAvailabilityRecord = {
+        month: report.month,
+        year: report.year,
+        overall_availability_percent: report.overallAvailabilityPercent,
+        sc005_compliant: report.evidenceBoard.sc005Compliant,
+        total_samples: report.evidenceBoard.totalSamples,
+        failed_samples: report.evidenceBoard.failedSamples,
+        generated_at_utc: report.generatedAtUtc,
+        report_json: report,
+        dependencies_summary: report.dependencies.map((dep) => ({
+          dependency: dep.dependency,
+          availability_percent: dep.availabilityPercent,
+          target_percent: dep.targetPercent,
+          slo_compliant: dep.sloCompliant,
+          error_budget_remaining_percent: dep.errorBudgetRemainingPercent
+        }))
+      };
+
+      const { data, error } = await supabaseClient
+        .from("monthly_availability_report")
+        .insert([record])
+        .select("id");
+
+      if (error) {
+        console.error("[MonthlyAvailabilityReportJob] Error persisting to Supabase:", error);
+        return undefined;
+      }
+
+      if (!data || data.length === 0) {
+        console.error("[MonthlyAvailabilityReportJob] No data returned after insert");
+        return undefined;
+      }
+
+      const recordId = data[0].id;
+      console.log(
+        `[MonthlyAvailabilityReportJob] Report persisted to Supabase with ID: ${recordId} (${report.year}-${pad2(report.month)})`
+      );
+
+      return recordId;
+    } catch (error) {
+      console.error("[MonthlyAvailabilityReportJob] Exception during Supabase persist:", error);
+      return undefined;
+    }
+  }
+
+  private async auditReportGeneration(
+    year: number,
+    month: number,
+    report: AvailabilityDashboard,
+    supabaseClient: SupabaseClient
+  ): Promise<void> {
+    try {
+      const auditEntry = {
+        action: "availability_report_generated",
+        details: {
+          month,
+          year,
+          overall_availability_percent: report.overallAvailabilityPercent,
+          sc005_compliant: report.evidenceBoard.sc005Compliant,
+          total_samples: report.evidenceBoard.totalSamples
+        },
+        generated_by: "system",
+        generated_at: report.generatedAtUtc,
+        user_id: null
+      };
+
+      const { error } = await supabaseClient.from("audit_trail").insert([auditEntry]);
+
+      if (error) {
+        console.warn(
+          "[MonthlyAvailabilityReportJob] Warning: Could not write audit trail:",
+          error.message
+        );
+      }
+    } catch (error) {
+      console.warn("[MonthlyAvailabilityReportJob] Exception during audit trail write:", error);
+    }
+  }
+
+  private async notifyStakeholders(
+    report: AvailabilityDashboard,
+    notificationConfig: NotificationConfig
+  ): Promise<void> {
+    try {
+      const notificationService = new AvailabilityNotificationService(notificationConfig);
+
+      const payload: AvailabilityNotificationPayload = {
+        month: report.month,
+        year: report.year,
+        overallAvailabilityPercent: report.overallAvailabilityPercent,
+        sc005Compliant: report.evidenceBoard.sc005Compliant,
+        totalSamples: report.evidenceBoard.totalSamples,
+        failedSamples: report.evidenceBoard.failedSamples,
+        generatedAtUtc: report.generatedAtUtc,
+        dependenciesSummary: report.dependencies.map((dep) => ({
+          dependency: dep.dependency,
+          availabilityPercent: dep.availabilityPercent,
+          targetPercent: dep.targetPercent,
+          sloCompliant: dep.sloCompliant
+        }))
+      };
+
+      const result = await notificationService.notifyStakeholders(payload);
+
+      console.log("[MonthlyAvailabilityReportJob] Notification results:", {
+        slackSent: result.slackSent,
+        emailSent: result.emailSent,
+        errors: result.errors
+      });
+
+      if (result.errors.length > 0) {
+        console.warn("[MonthlyAvailabilityReportJob] Notification errors:", result.errors);
+      }
+    } catch (error) {
+      console.error("[MonthlyAvailabilityReportJob] Exception during notification:", error);
+    }
   }
 }

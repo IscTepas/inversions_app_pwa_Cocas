@@ -1,0 +1,231 @@
+// FIC: ChatPanel — AI chat panel with sessionStorage history, context-aware sending, and rate limit handling.
+// FIC: ChatPanel — panel de chat IA con historial en sessionStorage, envío con contexto y manejo de rate limit.
+
+import React, { useState, useEffect, useCallback } from "react";
+import { MessageSquare } from "lucide-react";
+import type { ChatMessage } from "./types";
+import { ChatMessageList } from "./ChatMessageList";
+import { ChatInputBar } from "./ChatInputBar";
+import { ChatContextBadge } from "./ChatContextBadge";
+import { sendChatMessage, sendFundamentalCopilotMessage, sendOptionsAnalysisQA } from "../../services/chat/chatApi";
+import { useSignalStore } from "../../store/signals";
+import { useAppShellStore } from "../../store/appShell";
+
+const STORAGE_KEY = "inversions.chat.history";
+const MAX_MESSAGES = 100;
+const TRIM_TO = 80;
+
+function generateId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function loadHistory(): ChatMessage[] {
+  try {
+    const raw = typeof window !== "undefined" ? window.sessionStorage.getItem(STORAGE_KEY) : null;
+    return raw ? (JSON.parse(raw) as ChatMessage[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(messages: ChatMessage[]): void {
+  try {
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+    }
+  } catch {
+    // silent — sessionStorage may be unavailable in some contexts
+  }
+}
+
+function extractTickerFromText(text: string): string | null {
+  const match = text.toUpperCase().match(/\b[A-Z]{1,5}(?:[.=][A-Z])?\b/);
+  return match?.[0] ?? null;
+}
+
+export function ChatPanel() {
+  const [messages, setMessages] = useState<ChatMessage[]>(() => loadHistory());
+  const [pending, setPending] = useState(false);
+  const { selectedInstrument, selectedOptionsStrategy, optionsStrategyParams } = useSignalStore();
+  const { analysisCategory } = useAppShellStore();
+
+  // FIC: Persist history to sessionStorage on every change.
+  // FIC: Persistir historial en sessionStorage en cada cambio.
+  useEffect(() => {
+    saveHistory(messages);
+  }, [messages]);
+
+  const trimHistory = useCallback((msgs: ChatMessage[]): ChatMessage[] => {
+    if (msgs.length <= MAX_MESSAGES) return msgs;
+    const systemMsg: ChatMessage = {
+      id: generateId(),
+      role: "system",
+      content: "El historial fue comprimido para mantener el rendimiento.",
+      context: null,
+      timestamp: Date.now(),
+      status: "ok",
+    };
+    return [systemMsg, ...msgs.slice(msgs.length - TRIM_TO)];
+  }, []);
+
+  const conversationHistoryRef = React.useRef<Array<{ role: "user" | "assistant"; content: string }>>([]);
+  const initialLoad = React.useRef(true);
+
+  useEffect(() => {
+    if (initialLoad.current) {
+      initialLoad.current = false;
+      return;
+    }
+    conversationHistoryRef.current = [];
+    setMessages([]);
+  }, [selectedInstrument?.symbol, selectedOptionsStrategy?.name, analysisCategory]);
+
+  const handleSend = useCallback(async (text: string) => {
+    if (pending) return;
+
+    const context = selectedInstrument?.symbol
+      ? { symbol: selectedInstrument.symbol, timeframe: "1d", analysisCategory }
+      : null;
+
+    const userMsg: ChatMessage = {
+      id: generateId(),
+      role: "user",
+      content: text,
+      context,
+      timestamp: Date.now(),
+      status: "ok",
+    };
+
+    const assistantId = generateId();
+    const assistantPending: ChatMessage = {
+      id: assistantId,
+      role: "assistant",
+      content: "",
+      context,
+      timestamp: Date.now(),
+      status: "pending",
+    };
+
+    setMessages((prev) => trimHistory([...prev, userMsg, assistantPending]));
+    setPending(true);
+
+    try {
+      let responseContent: string;
+
+      const strategyKeyMap: Record<string, string> = {
+        "short-put":  "SHORT_PUT",
+        "long-put":   "LONG_PUT",
+        "short-call": "SHORT_CALL",
+        "long-call":  "LONG_CALL",
+      };
+
+      if (selectedOptionsStrategy && optionsStrategyParams) {
+        const response = await sendOptionsAnalysisQA({
+          ...optionsStrategyParams,
+          question: text,
+          selectedStrategy: strategyKeyMap[selectedOptionsStrategy.id],
+        });
+        responseContent = response.answer;
+      } else if (analysisCategory === "fundamental") {
+        const ticker = selectedInstrument?.symbol ?? extractTickerFromText(text);
+        if (!ticker) {
+          throw new Error("Selecciona una empresa o escribe el ticker en tu pregunta para analizar fundamentales.");
+        }
+        const history = conversationHistoryRef.current;
+        const response = await sendFundamentalCopilotMessage({
+          ticker,
+          question: text,
+          strategy: selectedOptionsStrategy?.name,
+          conversationHistory: history,
+        });
+        responseContent = response.answer;
+        conversationHistoryRef.current = [
+          ...history,
+          { role: "user", content: text },
+          { role: "assistant", content: response.answer },
+        ];
+      } else {
+        const response = await sendChatMessage({
+          symbol: context?.symbol ?? "",
+          timeframe: context?.timeframe ?? "1d",
+          question: text,
+          context: context?.analysisCategory,
+        });
+        responseContent = response.explanation;
+      }
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId
+            ? { ...m, content: responseContent, status: "ok" }
+            : m
+        )
+      );
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Error desconocido.";
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId
+            ? { ...m, content: errorMsg, status: "error" }
+            : m
+        )
+      );
+    } finally {
+      setPending(false);
+    }
+  }, [pending, selectedInstrument, analysisCategory, trimHistory]);
+
+  const handleRetry = useCallback((messageId: string) => {
+    const errorMsg = messages.find((m) => m.id === messageId);
+    const preceding = messages.slice().reverse().find((m) => m.role === "user");
+    if (preceding) {
+      void handleSend(preceding.content);
+    } else if (errorMsg) {
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    }
+  }, [messages, handleSend]);
+
+  return (
+    <div
+      data-testid="chat-panel"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        minWidth: 0,
+        overflow: "hidden",
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          flexShrink: 0,
+          padding: "0 var(--space-sm)",
+          height: "var(--nav-height)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          borderBottom: "1px solid var(--color-border)",
+          gap: "var(--space-sm)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)", minWidth: 0 }}>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)", minWidth: 0 }}>
+            <MessageSquare size={16} style={{ color: "var(--color-accent)", flexShrink: 0 }} />
+            <span style={{ fontWeight: "var(--font-weight-emphasis)", fontSize: "var(--font-size-sm)", color: "var(--color-text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              Chat IA
+            </span>
+          </div>
+        </div>
+        <ChatContextBadge />
+      </div>
+
+      {/* Message list */}
+      <ChatMessageList messages={messages} onRetry={handleRetry} />
+
+      {/* Input */}
+      <ChatInputBar onSend={(text) => void handleSend(text)} pending={pending} />
+    </div>
+  );
+}

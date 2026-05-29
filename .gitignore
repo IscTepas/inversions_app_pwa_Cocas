@@ -2,6 +2,8 @@ node_modules/
 dist/
 build/
 coverage/
+!**/routes/coverage/
+!**/modules/strategies/coverage/
 *.log
 .env
 .env.*
@@ -17,7 +19,9 @@ venv/
 Thumbs.db
 *.tmp
 *.swp
+*:Zone.Identifier
 .vscode/
 .idea/
+.claude/
 
 .tmp-ai-drfic/

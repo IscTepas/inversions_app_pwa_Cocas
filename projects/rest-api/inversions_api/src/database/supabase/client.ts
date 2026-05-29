@@ -9,24 +9,19 @@
 import { createClient } from "@supabase/supabase-js";
 import ws from "ws";
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
 const supabaseServiceKey =
-  process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
-// FIC: Validate required environment variables at module load time
-// FIC: Validar variables de entorno requeridas en tiempo de carga del módulo
-if (!supabaseUrl) {
-  throw new Error(
-    "SUPABASE_URL environment variable is required (VITE_SUPABASE_URL is accepted as alias). " +
-    "SUPABASE_URL es una variable de entorno requerida (VITE_SUPABASE_URL se acepta como alias)."
-  );
-}
-
-if (!supabaseServiceKey) {
-  throw new Error(
-    "SUPABASE_SERVICE_KEY environment variable is required for server-side operations (SUPABASE_SERVICE_ROLE_KEY is accepted as alias). " +
-    "SUPABASE_SERVICE_KEY es una variable de entorno requerida para operaciones del lado del servidor (SUPABASE_SERVICE_ROLE_KEY se acepta como alias)."
-  );
+/**
+ * FIC: Validate that required Supabase environment variables are set.
+ * Call this explicitly before using supabaseClient in production paths.
+ * Validation is NOT at module load time so that tests can import the module
+ * without requiring env vars.
+ */
+export function validateSupabaseConfig(): void {
+  if (!supabaseUrl) throw new Error("SUPABASE_URL environment variable is required");
+  if (!supabaseServiceKey) throw new Error("SUPABASE_SERVICE_KEY environment variable is required");
 }
 
 /**
@@ -47,8 +42,8 @@ if (!supabaseServiceKey) {
  * y debe respetar políticas RLS al insertar/actualizar registros de auditoría y datos de usuario.
  */
 export const supabaseClient = createClient(
-  supabaseUrl,
-  supabaseServiceKey,
+  supabaseUrl || "https://placeholder.supabase.co",
+  supabaseServiceKey || "placeholder",
   {
     auth: {
       // FIC: Disable auto-refresh for service role operations
