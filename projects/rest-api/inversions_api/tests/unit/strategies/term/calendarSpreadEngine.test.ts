@@ -103,6 +103,22 @@ describe("CalendarSpreadEngine", () => {
       expect(Math.max(...prices)).toBeGreaterThan(100);
     });
 
+    it("should calculate scenario pnl from net entry cost and contract count", () => {
+      const contract = new TermStrategyContract({
+        legs: [
+          { strike: 100, expiration: shortExpiration, premium: 5.0, contracts: 2, optionStyle: "call" },
+          { strike: 100, expiration: longExpiration, premium: 8.0, contracts: 2, optionStyle: "call" },
+        ],
+        underlying: "SPY",
+      });
+      const engine = new CalendarSpreadEngine(contract);
+      const result = engine.analyze();
+      const atmScenario = result.scenarios.find(s => s.underlyingPrice === 100);
+
+      expect(atmScenario).toBeDefined();
+      expect(atmScenario!.pnl).toBeCloseTo(atmScenario!.strategyValue - 6, 1);
+    });
+
     it("should handle call variant", () => {
       const contract = makeValidContract("call");
       const engine = new CalendarSpreadEngine(contract);

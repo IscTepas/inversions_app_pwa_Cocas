@@ -1,13 +1,13 @@
 /**
  * diagonalSpread.ts — T168 (endpoint REST)
- * Proposito: Ruta POST /api/v1/strategies/term/diagonal.
+ * Proposito: Ruta POST /api/v1/strategies/term/diagonal.S
  * Orquesta: TermStrategyContract (validacion) -> DiagonalSpreadEngine (analisis con griegas)
  *           -> TermSimulationEngine (Monte Carlo + deterministico)
  *           -> TermReportEngine (reporte estructurado).
  * Llamado por: src/index.ts (registra el router en /api/v1/strategies/term linea 64)
  * Dependencias: termStrategyContract, diagonalSpreadEngine, termSimulationEngine, termReportEngine
  */
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { TermStrategyContract } from "../../../modules/strategies/term/termStrategyContract";
 import { DiagonalSpreadEngine } from "../../../modules/strategies/term/diagonalSpreadEngine";
 import { TermSimulationEngine } from "../../../modules/strategies/term/termSimulationEngine";
@@ -29,6 +29,112 @@ export interface DiagonalRequest {
 }
 
 export const diagonalSpreadRouter = Router();
+
+type DiagonalVariant = "call" | "put";
+
+function buildDiagonalBody(body: DiagonalRequest, variant?: DiagonalVariant): DiagonalRequest {
+  if (!variant) {
+    return body;
+  }
+
+  return {
+    ...body,
+    legs: body.legs?.map(leg => ({
+      ...leg,
+      optionStyle: variant,
+    })),
+  };
+}
+
+function getDiagonalStructureName(optionStyle: "call" | "put"): string {
+  return optionStyle === "call" ? "Diagonal Call Spread" : "Diagonal Put Spread";
+}
+
+function getDiagonalStructureDescription(optionStyle: "call" | "put"): string {
+  return optionStyle === "call"
+    ? "Pata corta call vendida y pata larga call comprada con strikes y expiraciones diferentes."
+    : "Pata corta put vendida y pata larga put comprada con strikes y expiraciones diferentes.";
+}
+
+function handleDiagonalSpread(variant?: DiagonalVariant) {
+  return (req: Request, res: Response) => {
+    try {
+      const body = buildDiagonalBody(req.body as DiagonalRequest, variant);
+
+      if (!body.legs || body.legs.length < 2) {
+        res.status(400).json({ error: "At least 2 legs are required" });
+        return;
+      }
+
+      const contract = new TermStrategyContract({
+        legs: body.legs.map(l => ({
+          ...l,
+          expiration: new Date(l.expiration),
+        })),
+        underlying: body.underlying,
+      });
+
+      const validation = contract.validate();
+      if (!validation.isValid) {
+        res.status(400).json({ error: "Validation failed", details: validation.errors });
+        return;
+      }
+
+      if (contract.getType() !== "diagonal") {
+        res.status(400).json({
+          error: "Invalid strategy type",
+          details: ["Diagonal endpoint requires different strikes. Use /calendar endpoint for same-strike spreads."],
+        });
+        return;
+      }
+
+      const resolvedVariant = contract.getLegs()[0].optionStyle;
+
+      const sortedLegs = [...body.legs].sort(
+        (a, b) => new Date(a.expiration).getTime() - new Date(b.expiration).getTime()
+      );
+      const netEntryCost = sortedLegs[1].premium * sortedLegs[1].contracts
+        - sortedLegs[0].premium * sortedLegs[0].contracts;
+
+      const engine = new DiagonalSpreadEngine(
+        contract, body.riskFreeRate ?? 0.05, body.ivCurve ?? []
+      );
+      const result = engine.analyze();
+
+      const simulation = new TermSimulationEngine(contract, null, engine, body.riskFreeRate ?? 0.05, body.ivCurve ?? []);
+      const mcConfig = body.monteCarlo ?? { iterations: 1000, distribution: "normal" as const };
+      const simResult = simulation.simulate(undefined, mcConfig);
+
+      const report = new TermReportEngine(null, result, simResult, null);
+
+      res.status(200).json({
+        strategy: "diagonal",
+        variant: resolvedVariant,
+        structureName: getDiagonalStructureName(resolvedVariant),
+        structureDescription: getDiagonalStructureDescription(resolvedVariant),
+        netEntryCost: Math.round(netEntryCost * 100) / 100,
+        analysis: {
+          shortDte: result.shortDte,
+          longDte: result.longDte,
+          greeks: result.greeks,
+          directionalProfile: result.directionalProfile,
+          adjustmentWindow: result.adjustmentWindow,
+        },
+        scenarios: result.scenarios,
+        thetaDecayProfile: result.thetaDecayProfile,
+        vegaShockProfile: result.vegaShockProfile,
+        simulation: {
+          deterministic: simResult.deterministic,
+          monteCarlo: simResult.monteCarlo,
+        },
+        report: report.generateReport(),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: message });
+    }
+  };
+}
 
 /**
  * @openapi
@@ -70,78 +176,39 @@ export const diagonalSpreadRouter = Router();
  *             schema:
  *               type: object
  *               properties:
- *                 strategy:        { type: string, example: "diagonal" }
- *                 analysis:        { type: object, properties: { shortDte: { type: integer }, longDte: { type: integer }, greeks: { type: object } } }
- *                 scenarios:       { type: array, items: { type: object } }
- *                 thetaDecayProfile: { type: array, items: { type: object } }
- *                 vegaShockProfile:  { type: array, items: { type: object } }
- *                 simulation:      { type: object, properties: { deterministic: { type: array }, monteCarlo: { type: object } } }
- *                 report:          { type: object }
+ *                 strategy:           { type: string, example: "diagonal" }
+ *                 variant:            { type: string, enum: [call, put] }
+ *                 structureName:      { type: string, example: "Diagonal Call Spread" }
+ *                 structureDescription: { type: string }
+ *                 netEntryCost:       { type: number }
+ *                 analysis:           { type: object, properties: { shortDte: { type: integer }, longDte: { type: integer }, greeks: { type: object }, directionalProfile: { type: string }, adjustmentWindow: { type: object } } }
+ *                 scenarios:          { type: array, items: { type: object } }
+ *                 thetaDecayProfile:  { type: array, items: { type: object } }
+ *                 vegaShockProfile:   { type: array, items: { type: object } }
+ *                 simulation:         { type: object, properties: { deterministic: { type: array }, monteCarlo: { type: object } } }
+ *                 report:             { type: object }
  *       400:
  *         description: Error de validacion
  *       500:
  *         description: Error interno del servidor
+ *
+ * /diagonal/call:
+ *   post:
+ *     tags: [Diagonal Spread]
+ *     summary: Calcula Diagonal Call Spread
+ *     description: Alias explicito de Diagonal Spread que fuerza optionStyle=call en todas las patas.
+ *
+ * /diagonal/put:
+ *   post:
+ *     tags: [Diagonal Spread]
+ *     summary: Calcula Diagonal Put Spread
+ *     description: Alias explicito de Diagonal Spread que fuerza optionStyle=put en todas las patas.
  */
 /** POST /diagonal: valida contrato, verifica que sea diagonal (strikes distintos), analiza, simula, genera reporte. Llamado desde src/index.ts linea 64 */
-diagonalSpreadRouter.post("/diagonal", (req, res) => {
-  try {
-    const body = req.body as DiagonalRequest;
+diagonalSpreadRouter.post("/diagonal", handleDiagonalSpread());
 
-    if (!body.legs || body.legs.length < 2) {
-      res.status(400).json({ error: "At least 2 legs are required" });
-      return;
-    }
+/** POST /diagonal/call: alias explicito para Diagonal Call Spread. */
+diagonalSpreadRouter.post("/diagonal/call", handleDiagonalSpread("call"));
 
-    const contract = new TermStrategyContract({
-      legs: body.legs.map(l => ({
-        ...l,
-        expiration: new Date(l.expiration),
-      })),
-      underlying: body.underlying,
-    });
-
-    const validation = contract.validate();
-    if (!validation.isValid) {
-      res.status(400).json({ error: "Validation failed", details: validation.errors });
-      return;
-    }
-
-    if (contract.getType() !== "diagonal") {
-      res.status(400).json({ error: "Input is not a diagonal spread. Use /calendar endpoint for same-strike spreads." });
-      return;
-    }
-
-    const engine = new DiagonalSpreadEngine(
-      contract, body.riskFreeRate ?? 0.05, body.ivCurve ?? []
-    );
-    const result = engine.analyze();
-
-    const simulation = new TermSimulationEngine(contract, null, engine, body.riskFreeRate ?? 0.05, body.ivCurve ?? []);
-    const mcConfig = body.monteCarlo ?? { iterations: 1000, distribution: "normal" as const };
-    const simResult = simulation.simulate(undefined, mcConfig);
-
-    const report = new TermReportEngine(null, result, simResult, null);
-
-    res.status(200).json({
-      strategy: "diagonal",
-      analysis: {
-        shortDte: result.shortDte,
-        longDte: result.longDte,
-        greeks: result.greeks,
-        directionalProfile: result.directionalProfile,
-        adjustmentWindow: result.adjustmentWindow,
-      },
-      scenarios: result.scenarios,
-      thetaDecayProfile: result.thetaDecayProfile,
-      vegaShockProfile: result.vegaShockProfile,
-      simulation: {
-        deterministic: simResult.deterministic,
-        monteCarlo: simResult.monteCarlo,
-      },
-      report: report.generateReport(),
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    res.status(500).json({ error: message });
-  }
-});
+/** POST /diagonal/put: alias explicito para Diagonal Put Spread. */
+diagonalSpreadRouter.post("/diagonal/put", handleDiagonalSpread("put"));
