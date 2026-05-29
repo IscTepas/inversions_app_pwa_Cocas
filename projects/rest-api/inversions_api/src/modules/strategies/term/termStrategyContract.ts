@@ -246,4 +246,9 @@ export class TermStrategyContract {
   getInput(): TermStrategyInput {
     return { ...this.input, legs: [...this.input.legs] };
   }
+
+  /** Genera señal del tipo de estrategia (calendar/diagonal) */
+  signal(): string {
+    return this.getType();
+  }
 }

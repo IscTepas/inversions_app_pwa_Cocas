@@ -219,4 +219,12 @@ export class TermRollOrchestrator {
   getContract(): TermStrategyContract {
     return this.contract;
   }
+
+  /** Genera señal de trading basada en la evaluación de roll */
+  signal(): string {
+    const result = this.evaluate();
+    if (result.shouldCloseEarly) return "CLOSE";
+    if (result.shouldRoll) return "ROLL";
+    return "HOLD";
+  }
 }

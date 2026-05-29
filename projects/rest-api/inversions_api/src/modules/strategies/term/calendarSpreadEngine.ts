@@ -255,4 +255,14 @@ export class CalendarSpreadEngine {
   getContract(): TermStrategyContract {
     return this.contract;
   }
+
+  /** Genera señal de trading basada en el análisis del Calendar Spread */
+  signal(): string {
+    const result = this.analyze();
+    if (result.shortDte <= 0) return "EXPIRED";
+    if (result.shortDte <= 7) return "ROLL";
+    if (result.greeks.theta < -5) return "THETA_ALERT";
+    if (Math.abs(result.greeks.delta) > 0.7) return "DELTA_ALERT";
+    return "HOLD";
+  }
 }

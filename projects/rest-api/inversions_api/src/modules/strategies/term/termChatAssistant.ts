@@ -227,6 +227,13 @@ export class TermChatAssistant {
     return "Neutral bias — limited directional exposure";
   }
 
+  /** Genera señal descriptiva basada en el tipo de estrategia y perfil direccional */
+  signal(): string {
+    const ctx = this.getContext();
+    if (!ctx) return "NO_DATA";
+    return `${ctx.strategyType.toUpperCase()}_${ctx.directionalProfile.toUpperCase()}`;
+  }
+
   /** Extrae metricas clave del contexto para structuredOutput */
   private extractMetrics(ctx: ChatContext | null): Record<string, number | string> {
     if (!ctx) return {};

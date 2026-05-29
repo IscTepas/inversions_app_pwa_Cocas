@@ -238,4 +238,12 @@ export class TermRiskEngine {
   getContract(): TermStrategyContract {
     return this.contract;
   }
+
+  /** Genera señal de riesgo basada en el análisis completo */
+  signal(netTheta: number, netGamma?: number): string {
+    const analysis = this.analyze(netTheta, netGamma);
+    if (analysis.limitsViolation) return "RISK_LIMIT_VIOLATION";
+    if (analysis.earlyAssignmentRisk?.isAtRisk) return "EARLY_ASSIGNMENT_RISK";
+    return "RISK_OK";
+  }
 }

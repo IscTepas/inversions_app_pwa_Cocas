@@ -4,7 +4,7 @@
 > **Proyecto:** DIANA Inversions — Módulo `strategies/term/`
 > **Tareas:** T162–T169, S-T09-C01
 > **Nota de salidas:** La mayoría de los cores devuelven **objetos tipados** (no strings).
-> El único método que devuelve un `string` plano es `TermReportEngine.toJson()`.
+> Todos los cores ahora exponen `signal(): string`. Además, `TermReportEngine.toJson()` serializa el reporte completo a JSON string.
 
 ---
 
@@ -31,11 +31,12 @@
 ### Métodos públicos y sus salidas
 
 | Método | Salida | Tipo | ¿Es string? |
-|---|---|---|---|
+|---|---|---|---|---|
 | `validate()` | Objeto con `isValid: boolean` y `errors: TermStrategyError[]` | `ValidationResult` | ❌ No |
 | `getType()` | `"calendar"` o `"diagonal"` | `StrategyType` (union literal) | ✅ Sí (string literal) |
 | `getLegs()` | Arreglo de patas del spread | `TermLeg[]` | ❌ No |
 | `getInput()` | Copia del input original | `TermStrategyInput` | ❌ No |
+| `signal()` | Tipo de estrategia: `"calendar"` \| `"diagonal"` | `string` | ✅ **SÍ** |
 
 ### Tipos clave
 
@@ -76,8 +77,9 @@ type StrategyType = "calendar" | "diagonal";
 ### Métodos públicos y sus salidas
 
 | Método | Salida | Tipo | ¿Es string? |
-|---|---|---|---|
+|---|---|---|---|---|
 | `analyze()` | Resultado completo del análisis | `CalendarSpreadResult` | ❌ No |
+| `signal()` | Señal de trading: `"EXPIRED"` \| `"ROLL"` \| `"THETA_ALERT"` \| `"DELTA_ALERT"` \| `"HOLD"` | `string` | ✅ **SÍ** |
 
 ### Tipo de salida
 
@@ -127,8 +129,9 @@ interface CalendarStressTest {
 ### Métodos públicos y sus salidas
 
 | Método | Salida | Tipo | ¿Es string? |
-|---|---|---|---|
+|---|---|---|---|---|
 | `analyze()` | Resultado completo del análisis | `RiskProfile` | ❌ No |
+| `signal()` | Señal de trading: `"ROLL"` \| `"BULLISH"` \| `"BEARISH"` \| `"NEUTRAL"` | `string` | ✅ **SÍ** |
 
 ### Tipo de salida
 
@@ -185,8 +188,9 @@ type DirectionalProfile = "bullish" | "bearish" | "neutral";
 ### Métodos públicos y sus salidas
 
 | Método | Salida | Tipo | ¿Es string? |
-|---|---|---|---|
+|---|---|---|---|---|
 | `simulate(backtest?, mcConfig?)` | Resultado completo de simulación | `SimulationResult` | ❌ No |
+| `signal(backtest?, mcConfig?)` | Señal de simulación: `"FAVORABLE"` \| `"UNFAVORABLE"` \| `"NEUTRAL"` \| `"NO_MC_DATA"` | `string` | ✅ **SÍ** |
 
 ### Tipo de salida
 
@@ -246,9 +250,10 @@ interface DeterministicScenario {
 ### Métodos públicos y sus salidas
 
 | Método | Salida | Tipo | ¿Es string? |
-|---|---|---|---|
+|---|---|---|---|---|
 | `analyze(netTheta, netGamma?)` | Análisis completo de riesgo | `RiskAnalysis` | ❌ No |
 | `getContract()` | El contrato que recibió | `TermStrategyContract` | ❌ No |
+| `signal(netTheta, netGamma?)` | Señal de riesgo: `"RISK_LIMIT_VIOLATION"` \| `"EARLY_ASSIGNMENT_RISK"` \| `"RISK_OK"` | `string` | ✅ **SÍ** |
 
 ### Tipo de salida
 
@@ -301,9 +306,10 @@ interface RiskAlert {
 ### Métodos públicos y sus salidas
 
 | Método | Salida | Tipo | ¿Es string? |
-|---|---|---|---|
+|---|---|---|---|---|
 | `generateReport()` | Reporte estructurado completo | `StructuredReport` | ❌ No |
-| `toJson()` | Reporte serializado | `string` | ✅ **SÍ — único método que devuelve string puro** |
+| `toJson()` | Reporte serializado | `string` | ✅ **SÍ** |
+| `signal()` | Señal de reporte: `"REPORT_CALENDAR"` \| `"REPORT_DIAGONAL"` \| `"REPORT_UNKNOWN"` | `string` | ✅ **SÍ** |
 | `generatePayoffCurve()` | Curva de payoff | `PayoffCurvePoint[]` | ❌ No |
 | `generateSurface()` | Superficie 3D (calendar) o null | `TimePriceIvSurface \| null` | ❌ No |
 | `calculateRiskMetrics()` | Métricas de riesgo agregadas | `RiskMetrics` | ❌ No |
@@ -357,7 +363,7 @@ interface ProbabilityConePoint {
 }
 ```
 
-> ✅ `TermReportEngine.toJson()` es el **único método de todos los cores** que devuelve un `string` puro (JSON serializado con `JSON.stringify(..., null, 2)`).
+> ✅ `TermReportEngine.toJson()` y `TermReportEngine.signal()` devuelven `string` puro.
 > ⚠️ `generatedAt` dentro del reporte es un string ISO — pero el objeto `StructuredReport` en sí no es un string.
 
 ---
@@ -372,9 +378,10 @@ interface ProbabilityConePoint {
 ### Métodos públicos y sus salidas
 
 | Método | Salida | Tipo | ¿Es string? |
-|---|---|---|---|
+|---|---|---|---|---|
 | `explain()` | Explicación estructurada completa | `ChatExplanation` | ❌ No |
 | `getContext()` | Contexto extraído de la estrategia | `ChatContext \| null` | ❌ No |
+| `signal()` | Señal contextual: `"CALENDAR_NEUTRAL"` \| `"DIAGONAL_BULLISH"` \| etc. | `string` | ✅ **SÍ** |
 
 ### Tipos de salida
 
@@ -421,9 +428,10 @@ interface ChatContext {
 ### Métodos públicos y sus salidas
 
 | Método | Salida | Tipo | ¿Es string? |
-|---|---|---|---|
+|---|---|---|---|---|
 | `evaluate()` | Recomendación completa de roll | `RollRecommendation` | ❌ No |
 | `getContract()` | El contrato | `TermStrategyContract` | ❌ No |
+| `signal()` | Señal de roll: `"CLOSE"` \| `"ROLL"` \| `"HOLD"` | `string` | ✅ **SÍ** |
 
 ### Tipo de salida
 
@@ -462,17 +470,25 @@ interface RollCost {
 ## Resumen de salidas — tabla comparativa
 
 | Core | Task | Método principal | Tipo de salida | ¿String? |
-|---|---|---|---|---|
+|---|---|---|---|---|---|
 | `TermStrategyContract` | T162 | `validate()` | `ValidationResult` | ❌ objeto |
 | `TermStrategyContract` | T162 | `getType()` | `"calendar" \| "diagonal"` | ✅ string literal |
+| `TermStrategyContract` | T162 | `signal()` | `"calendar" \| "diagonal"` | ✅ **SÍ** |
 | `CalendarSpreadEngine` | T163 | `analyze()` | `CalendarSpreadResult` | ❌ objeto |
+| `CalendarSpreadEngine` | T163 | `signal()` | `"EXPIRED" \| "ROLL" \| "THETA_ALERT" \| "DELTA_ALERT" \| "HOLD"` | ✅ **SÍ** |
 | `DiagonalSpreadEngine` | T164 | `analyze()` | `RiskProfile` | ❌ objeto |
+| `DiagonalSpreadEngine` | T164 | `signal()` | `"ROLL" \| "BULLISH" \| "BEARISH" \| "NEUTRAL"` | ✅ **SÍ** |
 | `TermSimulationEngine` | T165 | `simulate()` | `SimulationResult` | ❌ objeto |
+| `TermSimulationEngine` | T165 | `signal()` | `"FAVORABLE" \| "UNFAVORABLE" \| "NEUTRAL" \| "NO_MC_DATA"` | ✅ **SÍ** |
 | `TermRiskEngine` | T166 | `analyze()` | `RiskAnalysis` | ❌ objeto |
+| `TermRiskEngine` | T166 | `signal()` | `"RISK_LIMIT_VIOLATION" \| "EARLY_ASSIGNMENT_RISK" \| "RISK_OK"` | ✅ **SÍ** |
 | `TermReportEngine` | T167 | `generateReport()` | `StructuredReport` | ❌ objeto |
-| `TermReportEngine` | T167 | `toJson()` | `string` | ✅ **STRING PURO** |
+| `TermReportEngine` | T167 | `toJson()` | `string` | ✅ **SÍ** |
+| `TermReportEngine` | T167 | `signal()` | `"REPORT_CALENDAR" \| "REPORT_DIAGONAL" \| "REPORT_UNKNOWN"` | ✅ **SÍ** |
 | `TermChatAssistant` | S-T09-C01 | `explain()` | `ChatExplanation` | ❌ objeto |
+| `TermChatAssistant` | S-T09-C01 | `signal()` | `"CALENDAR_NEUTRAL" \| "DIAGONAL_BULLISH" \| etc.` | ✅ **SÍ** |
 | `TermRollOrchestrator` | T169 | `evaluate()` | `RollRecommendation` | ❌ objeto |
+| `TermRollOrchestrator` | T169 | `signal()` | `"CLOSE" \| "ROLL" \| "HOLD"` | ✅ **SÍ** |
 
 ### Casos especiales de tipos no-string dentro de objetos
 
@@ -483,6 +499,91 @@ interface RollCost {
 | `TermChatAssistant` | `structuredOutput.metrics` | `Record<string, number \| string>` | Mixto: puede ser número o string |
 | `TermReportEngine` | `TimePriceIvSurface.pnlMatrix` | `number[][]` | Matriz 2D, no array plano |
 | `TermReportEngine` | `StructuredReport.surface` | `TimePriceIvSurface \| null` | `null` para diagonal |
+
+---
+
+## Ejemplos de retorno de `signal(): string`
+
+### 1. `TermStrategyContract.signal()`
+```ts
+const contract = new TermStrategyContract(input);
+contract.signal(); // "calendar" | "diagonal"
+```
+
+### 2. `CalendarSpreadEngine.signal()`
+```ts
+const engine = new CalendarSpreadEngine(contract);
+const signal = engine.signal();
+// Casos:
+//   shortDte <= 0              → "EXPIRED"
+//   shortDte <= 7              → "ROLL"
+//   netTheta < -5              → "THETA_ALERT"
+//   |netDelta| > 0.7           → "DELTA_ALERT"
+//   default                    → "HOLD"
+```
+
+### 3. `DiagonalSpreadEngine.signal()`
+```ts
+const engine = new DiagonalSpreadEngine(contract);
+const signal = engine.signal();
+// Casos:
+//   adjustmentWindow != null   → "ROLL"
+//   directionalProfile=bullish → "BULLISH"
+//   directionalProfile=bearish → "BEARISH"
+//   default                    → "NEUTRAL"
+```
+
+### 4. `TermSimulationEngine.signal()`
+```ts
+const engine = new TermSimulationEngine(contract, calEngine, diagEngine);
+const signal = engine.signal(historicalData, mcConfig);
+// Casos:
+//   sin Monte Carlo            → "NO_MC_DATA"
+//   meanPnl > 5 && var95 > -10 → "FAVORABLE"
+//   meanPnl < -5 || var95 < -20→ "UNFAVORABLE"
+//   default                    → "NEUTRAL"
+```
+
+### 5. `TermRiskEngine.signal()`
+```ts
+const engine = new TermRiskEngine(contract);
+const signal = engine.signal(netTheta, netGamma);
+// Casos:
+//   limitsViolation            → "RISK_LIMIT_VIOLATION"
+//   earlyAssignmentRisk        → "EARLY_ASSIGNMENT_RISK"
+//   default                    → "RISK_OK"
+```
+
+### 6. `TermRollOrchestrator.signal()`
+```ts
+const orchestrator = new TermRollOrchestrator(contract, riskAnalysis, netTheta);
+const signal = orchestrator.signal();
+// Casos:
+//   shouldCloseEarly           → "CLOSE"
+//   shouldRoll                 → "ROLL"
+//   default                    → "HOLD"
+```
+
+### 7. `TermReportEngine.signal()`
+```ts
+const engine = new TermReportEngine(calResult, diagResult, simResult, riskResult);
+const signal = engine.signal();
+// Casos:
+//   strategy="calendar"        → "REPORT_CALENDAR"
+//   strategy="diagonal"        → "REPORT_DIAGONAL"
+//   default                    → "REPORT_UNKNOWN"
+```
+
+### 8. `TermChatAssistant.signal()`
+```ts
+const assistant = new TermChatAssistant(calResult, diagResult, simResult, riskResult);
+const signal = assistant.signal();
+// Casos:
+//   calendar + neutral         → "CALENDAR_NEUTRAL"
+//   diagonal + bullish         → "DIAGONAL_BULLISH"
+//   diagonal + bearish         → "DIAGONAL_BEARISH"
+//   sin datos                  → "NO_DATA"
+```
 
 ---
 

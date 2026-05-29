@@ -528,4 +528,13 @@ export class DiagonalSpreadEngine {
   getContract(): TermStrategyContract {
     return this.contract;
   }
+
+  /** Genera señal de trading basada en el perfil direccional y ventana de ajuste del Diagonal Spread */
+  signal(): string {
+    const result = this.analyze();
+    if (result.adjustmentWindow) return "ROLL";
+    if (result.directionalProfile === "bullish") return "BULLISH";
+    if (result.directionalProfile === "bearish") return "BEARISH";
+    return "NEUTRAL";
+  }
 }

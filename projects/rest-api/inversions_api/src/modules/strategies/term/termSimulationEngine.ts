@@ -367,4 +367,17 @@ export class TermSimulationEngine {
   getDiagonalEngine(): DiagonalSpreadEngine | null {
     return this.diagonalEngine;
   }
+
+  /** Genera señal de trading basada en los resultados de Monte Carlo */
+  signal(
+    historicalData?: OhlcData[],
+    monteCarloConfig?: MonteCarloConfig
+  ): string {
+    const result = this.simulate(historicalData, monteCarloConfig);
+    const mc = result.monteCarlo;
+    if (!mc) return "NO_MC_DATA";
+    if (mc.meanPnl > 5 && mc.var95 > -10) return "FAVORABLE";
+    if (mc.meanPnl < -5 || mc.var95 < -20) return "UNFAVORABLE";
+    return "NEUTRAL";
+  }
 }

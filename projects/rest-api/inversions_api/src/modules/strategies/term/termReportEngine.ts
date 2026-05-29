@@ -315,6 +315,12 @@ export class TermReportEngine {
     return JSON.stringify(this.generateReport(), null, 2);
   }
 
+  /** Genera señal de reporte indicando el tipo de estrategia analizada */
+  signal(): string {
+    const report = this.generateReport();
+    return `REPORT_${report.strategy.toUpperCase()}`;
+  }
+
   /** Encuentra los precios donde P&L cruza cero (break-even points) desde una curva de payoff.
    *  Busca pares consecutivos donde pnl cambia de signo e interpola linealmente. */
   static calculateBreakEvens(curve: PayoffCurvePoint[]): number[] {
