@@ -18,7 +18,7 @@ describe("runtime mode routes", () => {
     const initial = await request(app).get("/api/runtime/mode");
     expect(initial.status).toBe(200);
     expect(initial.body.mode).toBe("online");
-    expect(initial.body.operationalMode).toBe("demo");
+    expect(initial.body.operationalMode).toBe("real");
 
     const updated = await request(app)
       .post("/api/runtime/mode")

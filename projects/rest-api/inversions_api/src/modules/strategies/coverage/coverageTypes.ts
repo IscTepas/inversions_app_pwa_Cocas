@@ -52,3 +52,19 @@ export function estimateOptionPremium(
 
   return Math.max(0, premium);
 }
+
+// FIC: Black-Scholes delta — N(d1) for call, N(d1)-1 for put. Used when API Greeks are unavailable. (EN)
+// FIC: Delta Black-Scholes — N(d1) para call, N(d1)-1 para put. Usado cuando Greeks de API no están disponibles. (ES)
+export function computeDelta(
+  type: "call" | "put",
+  strike: number,
+  iv: number,
+  dte: number,
+  underlyingPrice: number
+): number {
+  if (strike <= 0 || underlyingPrice <= 0 || iv <= 0 || dte <= 0) return 0;
+  const T = dte / 365;
+  const r = 0.05;
+  const d1 = (Math.log(underlyingPrice / strike) + (r + 0.5 * iv * iv) * T) / (iv * Math.sqrt(T));
+  return type === "call" ? normalCdf(d1) : normalCdf(d1) - 1;
+}

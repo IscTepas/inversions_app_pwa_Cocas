@@ -1,11 +1,9 @@
-// FIC: OHLC source adapter for indicators module. Uses deterministic mock candles
-// FIC: mirroring routes/market-data/ohlc.ts until TEAM-01 publishes the real source.
-//
-// FIC: Adaptador de fuente OHLC para el modulo de indicadores. Usa velas mock
-// FIC: deterministas alineadas con routes/market-data/ohlc.ts hasta que TEAM-01
-// FIC: publique la fuente real.
+// FIC: OHLC source adapter — fetches real candles from Yahoo Finance v8, falls back to mock on failure. (EN)
+// FIC: Adaptador de fuente OHLC — obtiene velas reales de Yahoo Finance v8, cae a mock si falla. (ES)
 
 import type { OhlcBar, Timeframe } from "./types";
+import { fetchYahooOhlc } from "../institutional/yahooChartParser";
+import { createHash } from "node:crypto";
 
 const TIMEFRAME_MS: Record<Timeframe, number> = {
   "1m": 60_000,
@@ -31,11 +29,10 @@ export interface GetCandlesOptions {
   endTimeMs?: number;
 }
 
-export function getCandles({ symbol, timeframe, count = 300, endTimeMs }: GetCandlesOptions): OhlcBar[] {
+// FIC: Emergency mock — used ONLY when all real sources fail. Logs a warning every call. (EN)
+// FIC: Mock de emergencia — solo cuando todas las fuentes reales fallan. Emite advertencia en cada llamada. (ES)
+function getMockCandles({ symbol, timeframe, count = 300, endTimeMs }: GetCandlesOptions): OhlcBar[] {
   const upper = symbol.toUpperCase();
-  if (!upper) {
-    return [];
-  }
   const step = intervalMs(timeframe);
   const end = endTimeMs ?? Date.now();
   const symbolSeed = upper.charCodeAt(0) % 7;
@@ -43,22 +40,43 @@ export function getCandles({ symbol, timeframe, count = 300, endTimeMs }: GetCan
   return Array.from({ length: count }).map((_, index) => {
     const t = end - (count - index) * step;
     const base = 100 + Math.sin(index / 12) * 8 + symbolSeed;
-    const open = Number((base + Math.sin(index / 3)).toFixed(2));
+    const open  = Number((base + Math.sin(index / 3)).toFixed(2));
     const close = Number((base + Math.cos(index / 4)).toFixed(2));
-    const high = Number((Math.max(open, close) + 0.8).toFixed(2));
-    const low = Number((Math.min(open, close) - 0.8).toFixed(2));
+    const high  = Number((Math.max(open, close) + 0.8).toFixed(2));
+    const low   = Number((Math.min(open, close) - 0.8).toFixed(2));
     return {
       time: Math.floor(t / 1000),
-      open,
-      high,
-      low,
-      close,
+      open, high, low, close,
       volume: Math.round(1000 + Math.abs(Math.sin(index)) * 3000)
     };
   });
 }
 
-import { createHash } from "node:crypto";
+// FIC: Fetch real OHLC candles from Yahoo Finance — async, returns mock on failure with warning. (EN)
+// FIC: Obtiene velas OHLC reales de Yahoo Finance — async, retorna mock con advertencia si falla. (ES)
+export async function getCandles(opts: GetCandlesOptions): Promise<OhlcBar[]> {
+  const { symbol, timeframe, count = 300 } = opts;
+
+  try {
+    const yahooCandles = await fetchYahooOhlc(symbol, timeframe);
+    if (yahooCandles && yahooCandles.length >= Math.min(count, 20)) {
+      const sliced = yahooCandles.slice(-count);
+      return sliced.map((c) => ({
+        time: c.time,
+        open: c.open,
+        high: c.high,
+        low: c.low,
+        close: c.close,
+        volume: c.volume,
+      }));
+    }
+  } catch {
+    // fall through to mock
+  }
+
+  console.warn(`[ohlcSource] Real OHLC unavailable for ${symbol}/${timeframe} — indicators will use mock candles`);
+  return getMockCandles(opts);
+}
 
 export function inputHash(candles: OhlcBar[]): string {
   const slim = candles.map((c) => `${c.time}|${c.close}`).join(",");

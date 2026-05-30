@@ -17,7 +17,7 @@ import {
 
 export const confluenceTableRouter = Router();
 
-confluenceTableRouter.get("/confluence-table", (req, res) => {
+confluenceTableRouter.get("/confluence-table", async (req, res) => {
   const ticket = String(req.query.ticket ?? "").toUpperCase();
   const timeframeRaw = String(req.query.timeframe ?? "1h");
   const fromRaw = req.query.from ? String(req.query.from) : undefined;
@@ -59,7 +59,7 @@ confluenceTableRouter.get("/confluence-table", (req, res) => {
   }
 
   const timeframe = timeframeRaw as Timeframe;
-  const candles = getCandles({ symbol: ticket, timeframe, count: 300 });
+  const candles = await getCandles({ symbol: ticket, timeframe, count: 300 });
 
   if (candles.length === 0) {
     return respondError(res, 404, "symbol_not_found", `No hay datos OHLC para '${ticket}'.`);

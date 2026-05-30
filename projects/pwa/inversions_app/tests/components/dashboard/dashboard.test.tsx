@@ -7,6 +7,7 @@ import { ExplainabilityTable } from "../../../src/features/dashboard/Explainabil
 import { MainDashboard } from "../../../src/features/dashboard/MainDashboard";
 
 vi.mock("../../../src/services/signals/signalApi", () => ({
+  getAuthHeaders: () => ({}),
   getDashboardOrchestrator: vi.fn(async () => ({
     timeframe: "1d",
     generatedAt: new Date().toISOString(),
@@ -40,8 +41,8 @@ describe("dashboard components", () => {
       />
     );
 
-    const button = screen.getByRole("button", { name: /Technical/i });
-    fireEvent.click(button);
+    const btn = screen.getByRole("button", { name: /Technical/i });
+    fireEvent.click(btn);
     expect(onToggle).toHaveBeenCalledWith("tech");
   });
 
@@ -100,8 +101,7 @@ describe("dashboard components", () => {
       render(<MainDashboard />);
     });
 
-    expect(screen.getByText(/Dashboard de Confluencia/i)).toBeTruthy();
-    expect(screen.getByPlaceholderText(/AAPL/i)).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Actualizar/i })).toBeTruthy();
+    expect(screen.getByText(/Configura los cores/i)).toBeTruthy();
+    expect(screen.getAllByText(/Ejecutar/i).length).toBeGreaterThan(0);
   });
 });

@@ -42,7 +42,7 @@ export function createChatExplainRouter(explainer: LlmExplainer = defaultExplain
     }
 
     const timeframe = timeframeRaw as Timeframe;
-    const candles = getCandles({ symbol, timeframe, count: 300 });
+    const candles = await getCandles({ symbol, timeframe, count: 300 });
     if (candles.length === 0) {
       return respondError(res, 404, "symbol_not_found", `No hay datos OHLC para '${symbol}'.`);
     }

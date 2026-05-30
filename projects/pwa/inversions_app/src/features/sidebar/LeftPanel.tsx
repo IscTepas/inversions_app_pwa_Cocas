@@ -1,20 +1,12 @@
-// FIC: LeftPanel — collapsible sidebar container routing content by active AppShell section.
-// FIC: LeftPanel — contenedor colapsable del sidebar que enruta el contenido según la sección activa del AppShell.
+// FIC: LeftPanel — dedicated watchlist panel; other sidebar views moved to dashboard sections. (EN)
+// FIC: LeftPanel — panel exclusivo del watchlist; otras vistas del sidebar se mueven a secciones del dashboard. (ES)
 
 import React from "react";
 import { useAppShellStore } from "../../store/appShell";
 import { WatchlistView } from "./views/WatchlistView";
-import { AnalysisCategoriesView } from "./views/AnalysisCategoriesView";
-import { StrategiesView } from "./views/StrategiesView";
-
-const SECTION_TITLES: Record<string, string> = {
-  watchlist: "Watchlist",
-  analysis: "Análisis",
-  strategies: "Estrategias",
-};
 
 export function LeftPanel() {
-  const { activeSection } = useAppShellStore();
+  const { toggleLeftPanel } = useAppShellStore();
 
   return (
     <div
@@ -45,20 +37,30 @@ export function LeftPanel() {
             color: "var(--color-text)",
             textTransform: "uppercase",
             letterSpacing: "0.06em",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
           }}
         >
-          {SECTION_TITLES[activeSection] ?? activeSection}
+          Watchlist
         </span>
+        <button
+          onClick={toggleLeftPanel}
+          aria-label="Colapsar panel"
+          style={{
+            background: "none",
+            border: "none",
+            color: "var(--color-text-muted)",
+            cursor: "pointer",
+            fontSize: "var(--font-size-sm)",
+            padding: "2px 4px",
+            lineHeight: 1,
+          }}
+        >
+          ‹
+        </button>
       </div>
 
-      {/* Content */}
+      {/* Watchlist always visible */}
       <div style={{ flex: 1, overflow: "auto" }}>
-        {activeSection === "watchlist" && <WatchlistView />}
-        {activeSection === "analysis" && <AnalysisCategoriesView />}
-        {activeSection === "strategies" && <StrategiesView />}
+        <WatchlistView />
       </div>
     </div>
   );

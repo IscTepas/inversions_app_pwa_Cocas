@@ -149,9 +149,9 @@ function candleCountFor(request: SimulationRequest): number {
 
 export interface RunSimulationDeps {
   /**
-   * FIC: Inyectable para test/runtime (default usa getCandles del mock determinista / TEAM-01).
+   * FIC: Inyectable para test/runtime (default usa getCandles async con Yahoo Finance). (EN)
    */
-  fetchCandles?: (input: { symbol: string; timeframe: Timeframe; count: number }) => OhlcBar[];
+  fetchCandles?: (input: { symbol: string; timeframe: Timeframe; count: number }) => OhlcBar[] | Promise<OhlcBar[]>;
   now?: Date;
   previousRows?: ConfluenceSignalRow[];
   /** FIC: Institutional engines context — injected by the route handler when A_INSTITUCIONAL is enabled. */
@@ -171,7 +171,7 @@ export async function runSimulation(
 ): Promise<SimulationRunResult> {
   const fetcher = deps.fetchCandles ?? getCandles;
   const count = candleCountFor(request);
-  const candles = fetcher({ symbol: request.ticket, timeframe: request.temporalidad, count });
+  const candles = await Promise.resolve(fetcher({ symbol: request.ticket, timeframe: request.temporalidad, count }));
   const computedAt = deps.now ?? new Date();
 
   const enabledCores = new Set<CoreId>(request.coresHabilitados);

@@ -3,28 +3,34 @@
 
 import React, { useState } from "react";
 import { ContentModal } from "../../components/ui/ContentModal";
+import { MarkdownContent } from "../../components/ui/MarkdownContent";
 import type { InstitutionalAnalysisResponse } from "../../services/institutional/institutionalApi";
+import type { ConfluenceSignalRow } from "../../services/signals/confluenceTableApi";
+import { ObservationsTab } from "../dashboard/ObservationsTab";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   ticker: string;
   data: InstitutionalAnalysisResponse | null;
+  resumen?: string;
+  signalRow?: ConfluenceSignalRow;
 }
 
-type Tab = "zones" | "trends" | "expiration" | "positions";
+type Tab = "zones" | "trends" | "expiration" | "positions" | "observaciones";
 
 const TAB_LABELS: Record<Tab, string> = {
   zones: "Zonas S/R",
   trends: "Tendencias",
   expiration: "Vencimientos",
   positions: "Posiciones 13F",
+  observaciones: "Observaciones",
 };
 
-const statusIcon = (status: string) => {
-  if (status === "ok") return "✅";
-  if (status === "partial") return "⚠️";
-  return "❌";
+const statusIcon = (status: string): React.ReactNode => {
+  if (status === "ok") return <span style={{ color: "var(--color-buy)", fontWeight: 700 }}>●</span>;
+  if (status === "partial") return <span style={{ color: "var(--color-warning)", fontWeight: 700 }}>●</span>;
+  return <span style={{ color: "var(--color-sell)", fontWeight: 700 }}>●</span>;
 };
 
 const strengthBar = (value: number) => {
@@ -35,7 +41,7 @@ const strengthBar = (value: number) => {
         style={{
           width: 60,
           height: 6,
-          backgroundColor: "rgba(255,255,255,0.1)",
+          backgroundColor: "var(--color-surface-raised)",
           borderRadius: 3,
           overflow: "hidden",
         }}
@@ -59,9 +65,9 @@ const strengthBar = (value: number) => {
 
 const trendBadge = (direction: "bullish" | "bearish" | "neutral") => {
   const config = {
-    bullish: { color: "var(--color-buy)", label: "🟢 Bullish" },
-    bearish: { color: "var(--color-sell)", label: "🔴 Bearish" },
-    neutral: { color: "var(--color-text-muted)", label: "⚫ Neutral" },
+    bullish: { color: "var(--color-buy)", label: "Bullish" },
+    bearish: { color: "var(--color-sell)", label: "Bearish" },
+    neutral: { color: "var(--color-text-muted)", label: "Neutral" },
   };
   return (
     <span
@@ -69,14 +75,18 @@ const trendBadge = (direction: "bullish" | "bearish" | "neutral") => {
         fontSize: "var(--font-size-sm)",
         fontWeight: 600,
         color: config[direction].color,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.35em",
       }}
     >
+      <span style={{ fontWeight: 700 }}>●</span>
       {config[direction].label}
     </span>
   );
 };
 
-export function InstitutionalDetailModal({ isOpen, onClose, ticker, data }: Props) {
+export function InstitutionalDetailModal({ isOpen, onClose, ticker, data, resumen, signalRow }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("zones");
 
   const subtitle = data
@@ -105,14 +115,14 @@ export function InstitutionalDetailModal({ isOpen, onClose, ticker, data }: Prop
     fontWeight: 600,
     textTransform: "uppercase",
     letterSpacing: "0.05em",
-    borderBottom: "1px solid rgba(255,255,255,0.06)",
+    borderBottom: "1px solid var(--color-border)",
   };
 
   const tdStyle: React.CSSProperties = {
     padding: "var(--space-xs) var(--space-sm)",
     fontSize: "var(--font-size-sm)",
     color: "var(--color-text)",
-    borderBottom: "1px solid rgba(255,255,255,0.04)",
+    borderBottom: "1px solid var(--color-border-subtle)",
   };
 
   return (
@@ -135,7 +145,7 @@ export function InstitutionalDetailModal({ isOpen, onClose, ticker, data }: Prop
               display: "flex",
               gap: 0,
               marginBottom: "var(--space-lg)",
-              borderBottom: "1px solid rgba(255,255,255,0.08)",
+              borderBottom: "1px solid var(--color-border)",
             }}
           >
             {(Object.keys(TAB_LABELS) as Tab[]).map((tab) => (
@@ -205,11 +215,11 @@ export function InstitutionalDetailModal({ isOpen, onClose, ticker, data }: Prop
                   </div>
                   <div>
                     <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "var(--space-xs)" }}>SMA-50</p>
-                    <p style={{ fontSize: "var(--font-size-md)", fontWeight: 600 }}>${data.trends.sma50.toFixed(2)}</p>
+                    <p style={{ fontSize: "var(--font-size-base)", fontWeight: 600 }}>${data.trends.sma50.toFixed(2)}</p>
                   </div>
                   <div>
                     <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "var(--space-xs)" }}>SMA-200</p>
-                    <p style={{ fontSize: "var(--font-size-md)", fontWeight: 600 }}>${data.trends.sma200.toFixed(2)}</p>
+                    <p style={{ fontSize: "var(--font-size-base)", fontWeight: 600 }}>${data.trends.sma200.toFixed(2)}</p>
                   </div>
                   <div>
                     <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "var(--space-xs)" }}>Crossover</p>
@@ -284,7 +294,7 @@ export function InstitutionalDetailModal({ isOpen, onClose, ticker, data }: Prop
                           justifyContent: "space-between",
                           alignItems: "center",
                           padding: "var(--space-xs) var(--space-sm)",
-                          backgroundColor: "rgba(255,255,255,0.03)",
+                          backgroundColor: "var(--color-surface-raised)",
                           borderRadius: "var(--radius-xs)",
                         }}
                       >
@@ -296,6 +306,18 @@ export function InstitutionalDetailModal({ isOpen, onClose, ticker, data }: Prop
                 </>
               ) : (
                 <p style={{ color: "var(--color-text-muted)" }}>Datos de vencimientos no disponibles.</p>
+              )}
+            </div>
+          )}
+
+          {activeTab === "observaciones" && (
+            <div>
+              {signalRow ? (
+                <ObservationsTab row={signalRow} />
+              ) : (
+                <p style={{ color: "var(--color-text-muted)", fontSize: "0.8rem" }}>
+                  No hay datos de señal disponibles.
+                </p>
               )}
             </div>
           )}
@@ -327,16 +349,16 @@ export function InstitutionalDetailModal({ isOpen, onClose, ticker, data }: Prop
               <div style={{ display: "flex", gap: "var(--space-xl)" }}>
                 <div>
                   <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>Inflows</p>
-                  <p style={{ fontWeight: 600, color: "var(--color-buy)" }}>${data.metrics?.inflows.toLocaleString()}</p>
+                  <p style={{ fontWeight: 600, color: "var(--color-buy)" }}>${data.metrics?.inflows.toLocaleString()}M</p>
                 </div>
                 <div>
                   <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>Outflows</p>
-                  <p style={{ fontWeight: 600, color: "var(--color-sell)" }}>${data.metrics?.outflows.toLocaleString()}</p>
+                  <p style={{ fontWeight: 600, color: "var(--color-sell)" }}>${data.metrics?.outflows.toLocaleString()}M</p>
                 </div>
                 <div>
                   <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>Net Flow</p>
                   <p style={{ fontWeight: 600, color: (data.metrics?.netFlow ?? 0) >= 0 ? "var(--color-buy)" : "var(--color-sell)" }}>
-                    ${data.metrics?.netFlow.toLocaleString()}
+                    ${data.metrics?.netFlow.toLocaleString()}M
                   </p>
                 </div>
               </div>

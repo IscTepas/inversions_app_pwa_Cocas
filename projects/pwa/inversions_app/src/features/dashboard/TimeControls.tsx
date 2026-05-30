@@ -20,14 +20,16 @@ const TIMEFRAME_PILLS = [
 ];
 
 const PERIOD_OPTIONS: PeriodOption[] = [
-  { label: "1D", value: "1d", daysBack: 1 },
-  { label: "1W", value: "1w", daysBack: 7 },
-  { label: "1M", value: "1m", daysBack: 30 },
-  { label: "3M", value: "3m", daysBack: 90 },
-  { label: "6M", value: "6m", daysBack: 180 },
-  { label: "1Y", value: "1y", daysBack: 365 },
-  { label: "YTD", value: "ytd", daysBack: 0 },
-  { label: "Custom", value: "custom", daysBack: 0 }
+  { label: "1D",     value: "1d",     daysBack: 1 },
+  { label: "1W",     value: "1w",     daysBack: 7 },
+  { label: "1M",     value: "1m",     daysBack: 30 },
+  { label: "3M",     value: "3m",     daysBack: 90 },
+  { label: "6M",     value: "6m",     daysBack: 180 },
+  { label: "1Y",     value: "1y",     daysBack: 365 },
+  { label: "5Y",     value: "5y",     daysBack: 365 * 5 },
+  { label: "Max",    value: "max",    daysBack: 365 * 30 },
+  { label: "YTD",    value: "ytd",    daysBack: 0 },
+  { label: "Custom", value: "custom", daysBack: 0 },
 ];
 
 interface TimeControlsProps {
@@ -60,9 +62,11 @@ export function TimeControls({ symbol, onTimeframeChange, onPeriodChange }: Time
       case "1m": startDate.setMonth(endDate.getMonth() - 1); break;
       case "3m": startDate.setMonth(endDate.getMonth() - 3); break;
       case "6m": startDate.setMonth(endDate.getMonth() - 6); break;
-      case "1y": startDate.setFullYear(endDate.getFullYear() - 1); break;
+      case "1y":  startDate.setFullYear(endDate.getFullYear() - 1); break;
+      case "5y":  startDate.setFullYear(endDate.getFullYear() - 5); break;
+      case "max": startDate = new Date(1970, 0, 1); break;
       case "ytd": startDate = new Date(endDate.getFullYear(), 0, 1); break;
-      default: startDate.setFullYear(endDate.getFullYear() - 1);
+      default:    startDate.setFullYear(endDate.getFullYear() - 1);
     }
     return { startDate, endDate };
   };
@@ -94,7 +98,7 @@ export function TimeControls({ symbol, onTimeframeChange, onPeriodChange }: Time
             <button
               key={opt.value}
               className={`btn-ghost ${period === opt.value ? "active" : ""}`}
-              style={{ padding: "0.2rem 0.55rem", fontSize: "var(--font-size-xs)" }}
+              style={{ padding: "0.25rem 0.6rem", fontSize: "var(--font-size-xs)" }}
               onClick={() => handlePeriodChange(opt.value)}
             >
               {opt.label}
@@ -112,7 +116,7 @@ export function TimeControls({ symbol, onTimeframeChange, onPeriodChange }: Time
             if (customStartDate && customEndDate) {
               onPeriodChange?.("custom", new Date(customStartDate), new Date(customEndDate));
             }
-          }} style={{ padding: "0.3rem 0.75rem", fontSize: "var(--font-size-xs)" }}>
+          }} style={{ padding: "0.25rem 0.6rem", fontSize: "var(--font-size-xs)" }}>
             Aplicar
           </button>
         </div>

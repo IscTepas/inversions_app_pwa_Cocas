@@ -96,6 +96,12 @@ export function WatchlistView() {
   };
 
   const handleRemove = async (id: string) => {
+    // FIC: Default items (id starts with "default-") are removed only from local state — no API call needed. (EN)
+    // FIC: Ítems por defecto (id empieza con "default-") se quitan solo del estado local — sin llamada al API. (ES)
+    if (id.startsWith("default-")) {
+      setItems((prev) => prev.filter((i) => i.id !== id));
+      return;
+    }
     try {
       const res = await fetch(`/api/watchlist/${id}`, { method: "DELETE", headers: getAuthHeaders() });
       if (!res.ok) return;

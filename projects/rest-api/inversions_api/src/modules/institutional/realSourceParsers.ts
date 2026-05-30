@@ -172,16 +172,28 @@ async function searchEfts(
         const res = await fetchImpl(url, { headers: JSON_HEADERS, signal: ac.signal });
         if (!res.ok) return [];
         const data = (await res.json()) as {
-          hits?: { hits?: Array<{ _source?: Record<string, string> }>; total?: { value?: number } };
+          hits?: { hits?: Array<{ _source?: Record<string, unknown> }>; total?: { value?: number } };
         };
+        // FIC: EFTS uses "adsh" (not "accession_no") and "ciks" array (not "cik") — fixed per actual API. (EN)
+        // FIC: EFTS usa "adsh" (no "accession_no") y array "ciks" (no "cik") — corregido según API real. (ES)
         const hits: EftsHit[] = (data?.hits?.hits ?? [])
           .slice(0, 50)
-          .map((h) => ({
-            accessionNo: h._source?.["accession_no"] ?? "",
-            cik: h._source?.["cik"] ?? "",
-            entityName: h._source?.["entity_name"] ?? "",
-            periodOfReport: h._source?.["period_of_report"] ?? "",
-          }))
+          .map((h) => {
+            const src = h._source ?? {};
+            const adsh = (src["adsh"] as string | undefined) ?? "";
+            const cikArr = src["ciks"] as string[] | undefined;
+            const cik = Array.isArray(cikArr) && cikArr.length > 0
+              ? cikArr[0].replace(/^0+/, "") // strip leading zeros
+              : ((src["cik"] as string | undefined) ?? "");
+            const displayNames = src["display_names"] as string[] | undefined;
+            const entityName = Array.isArray(displayNames) && displayNames.length > 0
+              ? displayNames[0]
+              : ((src["entity_name"] as string | undefined) ?? "");
+            const periodOfReport = (src["period_ending"] as string | undefined)
+              ?? (src["period_of_report"] as string | undefined)
+              ?? "";
+            return { accessionNo: adsh, cik, entityName, periodOfReport };
+          })
           .filter((h) => h.accessionNo && h.cik);
 
         searchEftsCache.set(cacheKey, { hits, timestamp: Date.now() });
@@ -219,14 +231,14 @@ async function extractValueFromFiling(
       if (!idxRes.ok) return 0;
 
       const idxText = await idxRes.text();
-      // Find the info table XML file (typically form13fInfoTable.xml)
-      const xmlMatch = idxText.match(/href="([^"]+form13fInfoTable[^"]*\.xml)"/i)
-        ?? idxText.match(/href="([^"]+\.xml)"/i);
-      if (!xmlMatch) return 0;
-
-      const xmlPath = xmlMatch[1].startsWith("http")
-        ? xmlMatch[1]
-        : `https://www.sec.gov${xmlMatch[1]}`;
+      // FIC: Priority: form13fInfoTable.xml > any non-primary XML > primary_doc.xml (header-only). (EN)
+      // FIC: Prioridad: form13fInfoTable.xml > cualquier XML no-primario > primary_doc.xml (solo header). (ES)
+      const allXmlMatches = [...idxText.matchAll(/href="([^"]+\.xml)"/gi)].map((m) => m[1]);
+      const infoTableMatch = allXmlMatches.find((p) => /form13fInfoTable/i.test(p));
+      const nonPrimaryMatch = allXmlMatches.find((p) => !/primary_doc/i.test(p));
+      const xmlHref = infoTableMatch ?? nonPrimaryMatch ?? allXmlMatches[0];
+      if (!xmlHref) return 0;
+      const xmlPath = xmlHref.startsWith("http") ? xmlHref : `https://www.sec.gov${xmlHref}`;
 
       // Download the XML and extract value for the target CUSIP
       const xmlRes = await fetchImpl(xmlPath, { headers: XML_HEADERS, signal: ac.signal });
@@ -242,17 +254,20 @@ async function extractValueFromFiling(
   }
 }
 
-// FIC: Parse 13F XML text and extract the <value> for a specific CUSIP using regex. (EN)
-// FIC: Parsea el texto XML del 13F y extrae el <value> para un CUSIP específico con regex. (ES)
+// FIC: Parse 13F XML text and extract the <value> for a specific CUSIP — handles namespaced XML (ns1:infoTable). (EN)
+// FIC: Parsea el texto XML del 13F y extrae el <value> para un CUSIP — maneja XML con namespace (ns1:infoTable). (ES)
 function extractCusipValue(xml: string, cusip: string): number {
-  // Find infoTable blocks containing the target CUSIP
-  const infoTableRegex = /<infoTable[\s\S]*?<\/infoTable>/gi;
+  // FIC: Match both namespaced (<ns1:infoTable>) and plain (<infoTable>) block formats. (EN)
+  // FIC: Coincide con bloques con namespace (<ns1:infoTable>) y planos (<infoTable>). (ES)
+  const infoTableRegex = /<(?:[a-zA-Z0-9_]+:)?infoTable[\s\S]*?<\/(?:[a-zA-Z0-9_]+:)?infoTable>/gi;
   let match: RegExpExecArray | null;
   let total = 0;
   while ((match = infoTableRegex.exec(xml)) !== null) {
     const block = match[0];
     if (block.includes(cusip)) {
-      const valueMatch = block.match(/<value>(\d+)<\/value>/i);
+      // FIC: Extract <value> or <ns1:value> — both formats appear in real 13F filings. (EN)
+      // FIC: Extrae <value> o <ns1:value> — ambos formatos aparecen en filings 13F reales. (ES)
+      const valueMatch = block.match(/<(?:[a-zA-Z0-9_]+:)?value>(\d+)<\/(?:[a-zA-Z0-9_]+:)?value>/i);
       if (valueMatch) total += parseInt(valueMatch[1], 10);
     }
   }
@@ -368,8 +383,10 @@ function buildFinraBody(offset: number): string {
     domainFilters: [],
     aggregations: [],
     dateRangeFilters: [],
-    fields: ["symbolCode", "currentShortInterest", "previousShortInterest",
-             "averageDailyVolume", "daysToCover", "changePercent", "settlementDate"],
+    // FIC: Fields updated to match FINRA API v2 schema (2024+ names). (EN)
+    // FIC: Campos actualizados para coincidir con el esquema FINRA API v2 (nombres 2024+). (ES)
+    fields: ["symbolCode", "currentShortPositionQuantity", "previousShortPositionQuantity",
+             "averageDailyVolumeQuantity", "daysToCoverQuantity", "changePercent", "settlementDate"],
     limit: FINRA_PAGE_SIZE,
     offset,
   });
@@ -379,10 +396,12 @@ function buildFinraBody(offset: number): string {
 // FIC: Normaliza un registro crudo de la API FINRA a nuestra estructura FinraRecord interna. (ES)
 function normalizeFinraRecord(raw: Record<string, unknown>): FinraRecord {
   const sym = (raw["symbolCode"] as string | undefined) ?? "";
-  const currentShort = Number(raw["currentShortInterest"] ?? 0);
-  const prevShort = Number(raw["previousShortInterest"] ?? 0);
-  const avgDailyVol = Number(raw["averageDailyVolume"] ?? 0);
-  const daysToCover = avgDailyVol > 0 ? currentShort / avgDailyVol : 0;
+  // FIC: FINRA API v2 uses "Quantity" suffix on numeric fields (updated 2024). (EN)
+  // FIC: FINRA API v2 usa sufijo "Quantity" en campos numéricos (actualizado 2024). (ES)
+  const currentShort = Number(raw["currentShortPositionQuantity"] ?? raw["currentShortInterest"] ?? 0);
+  const prevShort = Number(raw["previousShortPositionQuantity"] ?? raw["previousShortInterest"] ?? 0);
+  const avgDailyVol = Number(raw["averageDailyVolumeQuantity"] ?? raw["averageDailyVolume"] ?? 0);
+  const daysToCover = Number(raw["daysToCoverQuantity"] ?? raw["daysToCover"] ?? (avgDailyVol > 0 ? currentShort / avgDailyVol : 0));
   const changePct = Number(raw["changePercent"] ?? 0);
   const settleDate = (raw["settlementDate"] as string | undefined) ?? new Date().toISOString().slice(0, 10);
   return {

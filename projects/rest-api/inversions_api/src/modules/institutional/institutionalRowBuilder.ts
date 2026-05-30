@@ -45,7 +45,7 @@ export function buildInstitutionalRows(input: BuildInstitutionalRowInput): Confl
   const score = scores.length > 0
     ? scores.reduce((s, v) => s + v, 0) / scores.length
     : 0.5;
-  const peso = trend?.trendStrength ?? score;
+  const peso = 1;
 
   // ── Evidence refs — most relevant signals from each engine ─────────────────
   const evidencia_refs: string[] = [];
@@ -99,12 +99,14 @@ export function buildInstitutionalRows(input: BuildInstitutionalRowInput): Confl
     metricas.SMA_200 = parseFloat(trend.sma200.toFixed(4));
     metricas.TREND_STRENGTH = parseFloat(trend.trendStrength.toFixed(4));
     metricas.CONTINUITY_PROB = parseFloat(trend.continuityProbability.toFixed(4));
-    metricas.INST_SCORE = parseFloat(trend.institutionalScore.toFixed(4));
   }
   if (zones) {
     metricas.SOPORTES = zones.supportZones.length;
     metricas.RESISTENCIAS = zones.resistanceZones.length;
     metricas.ATR = parseFloat(zones.atr.toFixed(4));
+    // FIC: INST_SCORE must match zones.institutionalScore used in senal and explicacion. (EN)
+    // FIC: INST_SCORE debe coincidir con zones.institutionalScore usado en señal y explicación. (ES)
+    metricas.INST_SCORE = parseFloat(zones.institutionalScore.toFixed(4));
   }
   if (expiration) {
     metricas.DAYS_TO_OPEX = expiration.daysToNextOpex;

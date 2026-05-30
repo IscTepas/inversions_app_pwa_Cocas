@@ -1,3 +1,4 @@
+import { GoogleGenAI } from "@google/genai";
 import type {
   AgentRole,
   IAgentMessage,
@@ -77,7 +78,7 @@ async function backoffRetry<T>(action: () => Promise<T>, attempts = 3, initialDe
 }
 
 export class GeminiAgentService {
-  private readonly ai: any;
+  private readonly ai: GoogleGenAI | null;
   private readonly primaryModel: string;
   private readonly fallbackModel: string;
   private readonly timeoutMs: number;
@@ -90,18 +91,10 @@ export class GeminiAgentService {
     this.fallbackModel = process.env.GEMINI_FALLBACK_MODEL ?? "gemini-2.5-flash";
     this.timeoutMs = parseInt(process.env.GEMINI_TIMEOUT_MS ?? "12000", 10);
 
-    this.ai = null as any;
     if (enabled && apiKey && apiKey.length > 0) {
-      this.initClient(apiKey);
-    }
-  }
-
-  private async initClient(apiKey: string): Promise<void> {
-    try {
-      const mod = await import("@google/genai");
-      (this as any).ai = new mod.GoogleGenAI({ apiKey });
-    } catch {
-      console.warn("Failed to load @google/genai, Gemini features disabled");
+      this.ai = new GoogleGenAI({ apiKey });
+    } else {
+      this.ai = null;
     }
   }
 

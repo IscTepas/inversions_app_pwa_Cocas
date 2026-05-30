@@ -3,19 +3,19 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useSignalStore, type SelectedSignal } from "../../store/signals";
-import { useAppShellStore } from "../../store/appShell";
-import { useInstitutionalStore, getNearestZone } from "../../store/institutional";
+import { useInstitutionalStore } from "../../store/institutional";
 import {
   getConfluenceTable,
   type ConfluenceSignalRow,
   type ConfluenceTableResponse
 } from "../../services/signals/confluenceTableApi";
-import { ObservationCell } from "./ObservationCell";
+import type { InstitutionalAnalysisResponse } from "../../services/institutional/institutionalApi";
 import { OptionGreeksRow } from "./OptionGreeksRow";
 import { InstitutionalDetailModal } from "../institutional/InstitutionalDetailModal";
+import { ObservationsTab } from "./ObservationsTab";
 
 // FIC: Columnas con ancho estable; la tabla se desplaza horizontalmente antes de aplastar texto.
-const TABLE_COLUMNS: Array<{ key: keyof ConfluenceSignalRow | "estrategia" | "observacion"; label: string; width: number }> = [
+const TABLE_COLUMNS: Array<{ key: keyof ConfluenceSignalRow | "estrategia"; label: string; width: number }> = [
   { key: "ticket",    label: "TICKET",     width: 76  },
   { key: "core",      label: "CORE",       width: 150 },
   { key: "subCore",   label: "SUBCORE",    width: 110 },
@@ -29,8 +29,34 @@ const TABLE_COLUMNS: Array<{ key: keyof ConfluenceSignalRow | "estrategia" | "ob
   { key: "invertir",  label: "INVERTIR",   width: 96  },
   { key: "estado",    label: "ESTADO",     width: 118 },
   { key: "estrategia",label: "ESTRATEGIA", width: 170 },
-  { key: "observacion",label: "OBSERVACION",width: 360 }
 ];
+
+function buildResumen(
+  row: ConfluenceSignalRow,
+  instResults: Record<string, InstitutionalAnalysisResponse>
+): string {
+  if (row.core === "A_INSTITUCIONAL") {
+    const result = instResults[row.ticket?.toUpperCase() ?? ""];
+    if (result) {
+      const parts: string[] = [];
+      if (result.trends) {
+        parts.push(`Tendencia: ${result.trends.direction} SMA50=${result.trends.sma50.toFixed(2)} SMA200=${result.trends.sma200.toFixed(2)}`);
+        if (result.trends.crossover) parts.push(`Crossover: ${result.trends.crossover.type} hace ${result.trends.crossover.daysAgo}d`);
+      }
+      if (result.zones) {
+        parts.push(`Zonas: ${result.zones.support.length} soporte, ${result.zones.resistance.length} resistencia`);
+        if (result.zones.support.length) parts.push(`Soporte clave: $${result.zones.support[0].price.toFixed(2)}`);
+        if (result.zones.resistance.length) parts.push(`Resistencia clave: $${result.zones.resistance[0].price.toFixed(2)}`);
+      }
+      if (result.expiration) parts.push(`Vencimiento: régimen=${result.expiration.currentRegime}, ${result.expiration.daysToNextOpex}d para OpEx, sesgo=${result.expiration.expiryBias}`);
+      if (result.metrics) parts.push(`Ownership: ${result.metrics.fundsOwnershipPct.toFixed(1)}%, NetFlow: $${result.metrics.netFlow.toLocaleString()}`);
+      return `[Institucional ${row.ticket}] ${parts.join(". ")}`;
+    }
+  }
+  const obs = row.observacion;
+  const met = Object.entries(obs.metricas ?? {}).map(([k, v]) => `${k}=${v}`).join(", ");
+  return [obs.objetivo, obs.senal, obs.explicacion, met ? `Métricas: ${met}` : ""].filter(Boolean).join(". ");
+}
 
 interface Props {
   symbol?: string;
@@ -56,13 +82,21 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [meta, setMeta] = useState<Omit<ConfluenceTableResponse, "rows"> | null>(null);
-  const [detailRow, setDetailRow] = useState<ConfluenceSignalRow | null>(null);
   const [modalTicker, setModalTicker] = useState<string | null>(null);
+  const [modalResumen, setModalResumen] = useState<string>("");
+  const [modalRow, setModalRow] = useState<ConfluenceSignalRow | null>(null);
+  const [stubCore, setStubCore] = useState<string | null>(null);
+  const [stubRow, setStubRow] = useState<ConfluenceSignalRow | null>(null);
 
   const { setSelectedSignal } = useSignalStore();
-  const { analysisCategory } = useAppShellStore();
   const { results: institutionalResults } = useInstitutionalStore();
-  const showInstitutionalColumns = analysisCategory === "institutional";
+
+  useEffect(() => {
+    if (!stubCore) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setStubCore(null); setStubRow(null); } };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [stubCore]);
 
   useEffect(() => {
     if (rowsProp) {
@@ -86,12 +120,15 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
       .finally(() => setLoading(false));
   }, [symbol, rowsProp]);
 
-  const sorted = useMemo(() => {
+  const enrichedSorted = useMemo(() => {
     const order = ["A_INDICADORES", "A_FUNDAMENTAL", "A_TECNICO", "A_INSTITUCIONAL", "A_NOTICIAS", "A_IA"];
-    return [...rows].sort((a, b) => order.indexOf(a.core) - order.indexOf(b.core));
-  }, [rows]);
+    return [...rows]
+      .sort((a, b) => order.indexOf(a.core) - order.indexOf(b.core))
+      .map((row) => ({ ...row, resumen_analisis: buildResumen(row, institutionalResults) }));
+  }, [rows, institutionalResults]);
 
-  const totalCols = TABLE_COLUMNS.length + (showInstitutionalColumns ? 4 : 0);
+  const totalCols = TABLE_COLUMNS.length;
+  const sorted = enrichedSorted;
 
   return (
     <section className="card" style={{ overflow: "hidden" }}>
@@ -118,22 +155,14 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
       </div>
 
       <div style={{ maxHeight: 500, overflow: "auto", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)" }}>
-        <table style={{ width: "100%", minWidth: 1760, borderCollapse: "collapse", tableLayout: "fixed" }}>
+        <table style={{ width: "100%", minWidth: 1400, borderCollapse: "collapse", tableLayout: "fixed" }}>
           <thead>
             <tr>
               {TABLE_COLUMNS.map((col) => (
-                <th key={col.key} style={{ position: "sticky", top: 0, background: "var(--color-surface, #14171c)", padding: "0.72rem 0.8rem", textAlign: "left", fontSize: "0.68rem", borderBottom: "1px solid var(--color-border)", width: col.width }}>
+                <th key={col.key} style={{ position: "sticky", top: 0, background: "var(--color-surface)", padding: "0.72rem 0.8rem", textAlign: "left", fontSize: "0.68rem", borderBottom: "1px solid var(--color-border)", width: col.width }}>
                   {col.label}
                 </th>
               ))}
-              {showInstitutionalColumns && (
-                <>
-                  <th style={{ position: "sticky", top: 0, background: "var(--color-surface, #14171c)", padding: "0.72rem 0.8rem", textAlign: "left", fontSize: "0.68rem", borderBottom: "1px solid var(--color-border)", color: "var(--color-accent)", width: 96 }}>INST. SCORE</th>
-                  <th style={{ position: "sticky", top: 0, background: "var(--color-surface, #14171c)", padding: "0.72rem 0.8rem", textAlign: "left", fontSize: "0.68rem", borderBottom: "1px solid var(--color-border)", color: "var(--color-accent)", width: 110 }}>TREND</th>
-                  <th style={{ position: "sticky", top: 0, background: "var(--color-surface, #14171c)", padding: "0.72rem 0.8rem", textAlign: "left", fontSize: "0.68rem", borderBottom: "1px solid var(--color-border)", color: "var(--color-accent)", width: 140 }}>ZONA CERCANA</th>
-                  <th style={{ position: "sticky", top: 0, background: "var(--color-surface, #14171c)", padding: "0.72rem 0.8rem", textAlign: "left", fontSize: "0.68rem", borderBottom: "1px solid var(--color-border)", color: "var(--color-accent)", width: 86 }}>DÍAS OPEX</th>
-                </>
-              )}
             </tr>
           </thead>
           <tbody>
@@ -146,42 +175,35 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
                 const rowKey = `${row.core}-${row.subCore ?? "agg"}-${idx}`;
                 const instData = institutionalResults[row.ticket?.toUpperCase() ?? ""];
                 const onClick = () => {
-                  if (showInstitutionalColumns && instData) {
-                    setModalTicker(row.ticket ?? null);
-                  } else {
+                  if (row.core === "A_INSTITUCIONAL") {
+                    if (instData) {
+                      setModalTicker(row.ticket ?? null);
+                      setModalResumen(row.resumen_analisis ?? "");
+                      setModalRow(row);
+                    } else {
+                      setSelectedSignal({
+                        id: rowKey,
+                        symbol: row.ticket,
+                        metadata: { evidencia_refs: row.evidencia_refs, core: row.core, subCore: row.subCore }
+                      } as SelectedSignal);
+                    }
+                  } else if (row.core === "A_INDICADORES") {
                     setSelectedSignal({
                       id: rowKey,
                       symbol: row.ticket,
                       metadata: { evidencia_refs: row.evidencia_refs, core: row.core, subCore: row.subCore }
                     } as SelectedSignal);
+                  } else {
+                    setStubCore(row.core);
+                    setStubRow(row);
                   }
                 };
 
-                const instScore = instData?.zones?.institutionalScore;
-                const trendDir = instData?.trends?.direction;
-                const allZones = instData?.zones?.all ?? [];
-                const nearestZone = getNearestZone(allZones, row.precio ?? 0);
-                const daysToOpex = instData?.expiration?.daysToNextOpex;
-
                 const cells = (
-                  <tr key={rowKey} onClick={onClick} style={{ cursor: "pointer", opacity: row.estado === "DEGRADADA" ? 0.62 : 1 }}>
+                  <tr key={rowKey} onClick={onClick} data-resumen={row.resumen_analisis ?? ""} style={{ cursor: "pointer", opacity: row.estado === "DEGRADADA" ? 0.62 : 1 }}>
                     {TABLE_COLUMNS.map((col) => {
                       let content: React.ReactNode;
-                      if (col.key === "observacion") {
-                        content = (
-                          <button
-                            className="btn-ghost"
-                            type="button"
-                            style={{ padding: "0.28rem 0.7rem", fontSize: "0.72rem" }}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setDetailRow(row);
-                            }}
-                          >
-                            Ver detalle
-                          </button>
-                        );
-                      } else if (col.key === "estrategia") {
+                      if (col.key === "estrategia") {
                         content = <span className="badge badge-hold">{(activeStrategy ?? "N/A").replace(/_/g, " ")}</span>;
                       } else if (col.key === "tipoSenal") {
                         content = <span style={{ color: colorForTipo(row.tipoSenal), fontWeight: 700 }}>{row.tipoSenal}</span>;
@@ -196,7 +218,7 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
                         content = (
                           <span>
                             {row.core}{" "}
-                            <span title={row.disclaimer_id} style={{ background: "var(--color-accent, #ffd43b)", color: "#000", borderRadius: 3, padding: "0 4px", fontSize: "0.6rem", fontWeight: 700 }}>IA</span>
+                            <span title={row.disclaimer_id} style={{ background: "var(--color-accent-subtle)", color: "var(--color-accent)", borderRadius: 3, padding: "0 4px", fontSize: "0.6rem", fontWeight: 700 }}>IA</span>
                           </span>
                         );
                       } else {
@@ -209,30 +231,6 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
                         </td>
                       );
                     })}
-                    {showInstitutionalColumns && (
-                      <>
-                        <td style={{ padding: "0.72rem 0.8rem", borderBottom: "1px solid var(--color-border)", fontSize: "0.78rem", verticalAlign: "middle" }}>
-                          {instScore != null ? (
-                            <span style={{ color: instScore >= 0.7 ? "var(--color-buy)" : instScore >= 0.4 ? "var(--color-hold)" : "var(--color-sell)", fontWeight: 600 }}>
-                              {instScore.toFixed(2)}
-                            </span>
-                          ) : "—"}
-                        </td>
-                        <td style={{ padding: "0.72rem 0.8rem", borderBottom: "1px solid var(--color-border)", fontSize: "0.78rem", verticalAlign: "middle" }}>
-                          {trendDir === "bullish" ? "🟢 Bullish" : trendDir === "bearish" ? "🔴 Bearish" : trendDir === "neutral" ? "⚫ Neutral" : "—"}
-                        </td>
-                        <td style={{ padding: "0.72rem 0.8rem", borderBottom: "1px solid var(--color-border)", fontSize: "0.78rem", verticalAlign: "middle" }}>
-                          {nearestZone
-                            ? <span style={{ color: nearestZone.type === "support" ? "var(--color-buy)" : "var(--color-sell)" }}>
-                                ${nearestZone.price.toFixed(2)} ({nearestZone.type === "support" ? "S" : "R"})
-                              </span>
-                            : "—"}
-                        </td>
-                        <td style={{ padding: "0.72rem 0.8rem", borderBottom: "1px solid var(--color-border)", fontSize: "0.78rem", verticalAlign: "middle" }}>
-                          {daysToOpex != null ? `${daysToOpex}d` : "—"}
-                        </td>
-                      </>
-                    )}
                   </tr>
                 );
                 if (row.optionLeg) {
@@ -245,84 +243,61 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
         </table>
       </div>
 
-      {detailRow && (
+      {stubCore && (
         <div
           role="dialog"
           aria-modal="true"
+          aria-labelledby="stub-dialog-title"
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.62)",
-            zIndex: 45,
+            background: "rgba(0,0,0,0.72)",
+            zIndex: 1100,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             padding: "1.25rem"
           }}
-          onClick={() => setDetailRow(null)}
+          onClick={() => { setStubCore(null); setStubRow(null); }}
         >
           <div
             className="card"
             style={{
-              width: "min(900px, 96vw)",
-              maxHeight: "88vh",
-              overflowY: "auto",
+              width: "min(560px, 94vw)",
+              maxHeight: "80vh",
+              display: "flex",
+              flexDirection: "column",
               border: "1px solid var(--color-border)",
-              boxShadow: "0 24px 80px rgba(0,0,0,0.55)"
+              boxShadow: "0 24px 80px rgba(0,0,0,0.55)",
+              padding: "1.75rem"
             }}
-            onClick={(event) => event.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
-              <div>
-                <h2 style={{ margin: 0 }}>Detalle de Señal</h2>
-                <p style={{ marginTop: "0.25rem", fontSize: "0.8rem" }}>{detailRow.ticket} · {detailRow.core}</p>
+            <h2 id="stub-dialog-title" style={{ marginBottom: "0.25rem", flexShrink: 0 }}>{stubCore.replace("A_", "")}</h2>
+            <p style={{ color: "var(--color-text-muted)", fontSize: "0.8rem", marginBottom: "1.25rem", flexShrink: 0 }}>
+              Análisis gráfico en construcción — próximamente disponible.
+            </p>
+
+            {stubRow && (
+              <div style={{ flex: 1, overflowY: "auto", marginBottom: "1.25rem" }}>
+                <ObservationsTab row={stubRow} activeStrategy={activeStrategy} />
               </div>
-              <button className="btn-ghost" type="button" onClick={() => setDetailRow(null)}>Cerrar</button>
-            </div>
+            )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.7rem", marginBottom: "1rem" }}>
-              {[
-                ["Subcore",    detailRow.subCore ?? "-"],
-                ["Precio",     Number.isFinite(detailRow.precio) ? detailRow.precio.toFixed(3) : "-"],
-                ["Señal",      detailRow.tipoSenal],
-                ["Tendencia",  detailRow.tendencia],
-                ["Score",      detailRow.score.toFixed(3)],
-                ["Peso",       detailRow.peso.toFixed(3)],
-                ["Invertir",   detailRow.invertir ? "SI" : "NO"],
-                ["Estado",     detailRow.estado],
-                ["Fecha",      detailRow.fecha],
-                ["Timeframe",  detailRow.timeframe],
-                ["Estrategia", (activeStrategy ?? "N/A").replace(/_/g, " ")]
-              ].map(([label, value]) => (
-                <div key={label} style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "0.6rem" }}>
-                  <div style={{ color: "var(--color-text-muted)", fontSize: "0.68rem", textTransform: "uppercase" }}>{label}</div>
-                  <strong style={{ fontSize: "0.85rem" }}>{value}</strong>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ marginBottom: "1rem" }}>
-              <h2 style={{ marginBottom: "0.5rem" }}>Observacion</h2>
-              <ObservationCell observation={detailRow.observacion} />
-            </div>
-
-            {detailRow.evidencia_refs?.length ? (
-              <div>
-                <h2 style={{ marginBottom: "0.5rem" }}>Evidencia</h2>
-                <ul style={{ marginLeft: "1rem", color: "var(--color-text-muted)", fontSize: "0.8rem" }}>
-                  {detailRow.evidencia_refs.map((ref, i) => <li key={`${ref}-${i}`}>{ref}</li>)}
-                </ul>
-              </div>
-            ) : null}
+            <button className="btn-ghost" type="button" onClick={() => { setStubCore(null); setStubRow(null); }} style={{ flexShrink: 0, alignSelf: "flex-end" }}>
+              Cerrar
+            </button>
           </div>
         </div>
       )}
 
       <InstitutionalDetailModal
         isOpen={modalTicker !== null}
-        onClose={() => setModalTicker(null)}
+        onClose={() => { setModalTicker(null); setModalRow(null); }}
         ticker={modalTicker ?? ""}
         data={modalTicker ? (institutionalResults[modalTicker.toUpperCase()] ?? null) : null}
+        resumen={modalResumen}
+        signalRow={modalRow ?? undefined}
       />
     </section>
   );

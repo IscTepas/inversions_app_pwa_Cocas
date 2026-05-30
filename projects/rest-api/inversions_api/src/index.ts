@@ -1,12 +1,9 @@
 import "dotenv/config";
 import express from "express";
-import path from "path";
-import swaggerUi from "swagger-ui-express";
 import { initializeEnvironment } from "./config/environment";
 import { printValidationResult, validateEnvironment } from "./config/envValidator";
 import { createAuditHistoryRouter } from "./routes/audit/history";
 import { createOperationDetailRouter } from "./routes/audit/operationDetail";
-import { registerAuditRoutes } from "./routes/auditRoutes";
 import { createApprovalRouter } from "./routes/execution/approve";
 import { createExecutionRouter } from "./routes/execution/execute";
 import { AuditHistoryService } from "./modules/audit/historyService";
@@ -35,20 +32,21 @@ import { chatExplainRouter } from "./routes/indicators/chatExplain";
 import { confluenceTableRouter } from "./routes/signals/confluenceTable";
 import { simulationRunRouter } from "./routes/simulation/run";
 import { indicatorsRateLimit, chatRateLimit } from "./middleware/indicatorsRateLimit";
-import { createCompanyProfileRouter } from "./routes/fundamental/companyProfile";
-import { createSp500ScreenerRouter } from "./routes/fundamental/sp500Screener";
-import { createFundamentalAnalyzeRouter } from "./routes/fundamental/analyze";
-import { createOptionsRouter } from "./routes/strategies/optionsRouter";
-import { createOptionsAnalysisQARouter } from "./routes/strategies/optionsAnalysisQARouter";
-import { createFundamentalCopilotRouter } from "./routes/ai/fundamentalCopilot";
-import { supabaseClient } from "./database/supabase/client";
-import { calendarSpreadRouter } from "./routes/strategies/term/calendarSpread";
-import { diagonalSpreadRouter } from "./routes/strategies/term/diagonalSpread";
-import { termComparatorRouter } from "./routes/strategies/term/termComparator";
+import { institutionalAnalysisRouter } from "./routes/institutional/institutionalAnalysis";
+import { regulatoryPositionsRouter } from "./routes/institutional/regulatoryPositions";
+import { institutionalCopilotRouter } from "./routes/ai/institutionalCopilot";
+import volatilityAnalysisRouter from "./routes/ai/volatilityAnalysis";
 import { coverageAnalyzeRouter } from "./routes/coverage/analyze";
 import { coverageCompareRouter } from "./routes/coverage/compare";
 import { coverageSimulateRouter } from "./routes/coverage/simulate";
-import { swaggerSpec } from "./swagger";
+import { optionChainRouter } from "./routes/options/chain";
+import { optionExpirationsRouter } from "./routes/options/expirations";
+import { supabaseClient } from "./database/supabase/client";
+import { createOptionsRouter } from "./routes/strategies/optionsRouter";
+import { createOptionsAnalysisQARouter } from "./routes/strategies/optionsAnalysisQARouter";
+import { calendarSpreadRouter } from "./routes/strategies/term/calendarSpread";
+import { diagonalSpreadRouter } from "./routes/strategies/term/diagonalSpread";
+import { termComparatorRouter } from "./routes/strategies/term/termComparator";
 
 const envValidation = validateEnvironment();
 if (!envValidation.isValid) {
@@ -64,8 +62,6 @@ initializeEnvironment();
 
 const app = express();
 app.use(express.json());
-
-registerAuditRoutes(app);
 
 const auditHistoryService = new AuditHistoryService();
 const approvalService = new ApprovalService();
@@ -97,20 +93,20 @@ app.use("/api/indicators", indicatorsRateLimit, bollingerRouter);
 app.use("/api/indicators", indicatorsRateLimit, indicatorsConfluenceRouter);
 app.use("/api/indicators", indicatorsHealthRouter);
 app.use("/api/chat", chatRateLimit, chatExplainRouter);
-app.use("/api/team-03/fundamental", createFundamentalAnalyzeRouter(supabaseClient));
-app.use("/api/team-03/fundamental", createCompanyProfileRouter(supabaseClient));
-app.use("/api/team-03/screener/sp500", createSp500ScreenerRouter(supabaseClient));
-app.use("/api/team-03/options", createOptionsRouter(supabaseClient));
-app.use("/api/team-03/options", createOptionsAnalysisQARouter(supabaseClient));
-app.use("/api/team-03/ai", createFundamentalCopilotRouter(supabaseClient));
-app.use("/api/v1/strategies/term", calendarSpreadRouter);
-app.use("/api/v1/strategies/term", diagonalSpreadRouter);
-app.use("/api/v1/strategies/term", termComparatorRouter);
+app.use("/api/institutional", institutionalAnalysisRouter);
+app.use("/api/institutional", regulatoryPositionsRouter);
+app.use("/api/ai", institutionalCopilotRouter);
+app.use("/api/ai/volatility", volatilityAnalysisRouter);
 app.use("/api/coverage", coverageAnalyzeRouter);
 app.use("/api/coverage", coverageCompareRouter);
 app.use("/api/coverage", coverageSimulateRouter);
-
-app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
+app.use("/api/options", indicatorsRateLimit, optionChainRouter);
+app.use("/api/options", indicatorsRateLimit, optionExpirationsRouter);
+app.use("/api/team-03/options", createOptionsRouter(supabaseClient));
+app.use("/api/team-03/options", createOptionsAnalysisQARouter(supabaseClient));
+app.use("/api/v1/strategies/term", calendarSpreadRouter);
+app.use("/api/v1/strategies/term", diagonalSpreadRouter);
+app.use("/api/v1/strategies/term", termComparatorRouter);
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
@@ -119,8 +115,6 @@ app.get("/health", (_req, res) => {
 app.get("/api/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
 });
-
-app.use(express.static(path.join(__dirname, "../../../pwa/inversions_app/public")));
 
 const port = Number(process.env.PORT ?? 3000);
 

@@ -10,7 +10,7 @@ import type { Timeframe } from "../../modules/indicators/types";
 
 export const macdRouter = Router();
 
-macdRouter.get("/macd", (req, res) => {
+macdRouter.get("/macd", async (req, res) => {
   const symbol = String(req.query.symbol ?? "").toUpperCase();
   const timeframeRaw = String(req.query.timeframe ?? "1h");
   const fast = Number(req.query.fast ?? 12);
@@ -41,7 +41,7 @@ macdRouter.get("/macd", (req, res) => {
   }
 
   const timeframe = timeframeRaw as Timeframe;
-  const candles = getCandles({ symbol, timeframe, count: countRaw });
+  const candles = await getCandles({ symbol, timeframe, count: countRaw });
 
   if (candles.length === 0) {
     return respondError(res, 404, "symbol_not_found", `No hay datos OHLC para '${symbol}'.`);

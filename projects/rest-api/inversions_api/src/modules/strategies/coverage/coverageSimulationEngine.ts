@@ -92,12 +92,26 @@ export class CoverageSimulationEngine {
       };
     }
 
-    // FIC: GBM simulation: S_T = S_0 * exp((μ - σ²/2)*T + σ*√T*Z), T=90/365, σ=0.25. (EN)
-    // FIC: Simulación GBM: S_T = S_0 * exp((μ - σ²/2)*T + σ*√T*Z), T=90/365, σ=0.25. (ES)
+    // FIC: GBM params — use real IV and DTE from the contract; fall back to market-average defaults only if absent. (EN)
+    // FIC: Parámetros GBM — usa IV y DTE reales del contrato; solo usa defaults si no están disponibles. (ES)
     const S0 = contract.underlyingPrice;
-    const T = 90 / 365;
-    const sigma = 0.25;
-    const mu = 0.05;
+
+    // Prefer contract.dte (resolved from real chain). If absent, compute from first leg's expiry.
+    let realDte = contract.dte ?? 0;
+    if (realDte <= 0 && contract.legs.length > 0) {
+      const expiryMs = new Date(contract.legs[0].expiry).getTime();
+      realDte = Math.max(1, Math.round((expiryMs - Date.now()) / 86_400_000));
+    }
+    if (realDte <= 0) realDte = 45;
+
+    // Prefer contract.iv (real implied volatility). Fallback 0.25 is last resort — always logged.
+    const sigma = (contract.iv && contract.iv > 0) ? contract.iv : 0.25;
+    if (!contract.iv || contract.iv <= 0) {
+      console.warn(`[CoverageSimulationEngine] No real IV for ${contract.ticker} — using σ=0.25 fallback`);
+    }
+
+    const T = realDte / 365;
+    const mu = 0.05; // risk-neutral drift (risk-free rate approximation)
     const drift = (mu - 0.5 * sigma * sigma) * T;
     const vol = sigma * Math.sqrt(T);
 

@@ -1,118 +1,106 @@
-// FIC: Main operational dashboard — AppShell 3-zone layout with ActivityBar and LeftPanel.
-// FIC: Dashboard operativo principal — layout AppShell de 3 zonas con ActivityBar y LeftPanel.
+// FIC: Main operational dashboard — AppShell 4-zone layout with ActivityBar, LeftPanel, and ChatPanel.
+// FIC: Dashboard operativo principal — layout AppShell de 4 zonas con ActivityBar, LeftPanel y ChatPanel.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  getDashboardOrchestrator,
-  type DashboardOrchestratorResponse,
-  type DashboardSignalCard
-} from "../../services/signals/signalApi";
-import { CoreSelector, type CoreDefinition } from "./CoreSelector";
-import { SignalOverlay } from "./SignalOverlay";
-import { ExplainabilityTable } from "./ExplainabilityTable";
-import { SignalEvidencePanel } from "../signals/SignalEvidencePanel";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { MessageSquare } from "lucide-react";
+import { GlobalChatDrawer } from "../../pages/ai/GlobalChatDrawer";
 import { SuperChart } from "./SuperChart";
+import { OptionChainTableConnected } from "../options/OptionChainTable";
+
 import { TimeControls } from "./TimeControls";
-import { IndicatorsMenu } from "./IndicatorsMenu";
-import { RuntimeModeSwitches } from "./RuntimeModeSwitches";
 import { ConfluenceSignalsTable } from "./ConfluenceSignalsTable";
 import { SimulationControlPanel } from "./simulation/SimulationControlPanel";
-import { ProjectionSimulationPanel } from "./simulation/ProjectionSimulationPanel";
-import type { AnalysisResult } from "./simulation/FundamentalAnalysisModal";
+import { SimulatorStrategySection } from "./simulation/SimulatorStrategySection";
+import type { CoverageModalParams } from "./simulation/CoverageParamsModal";
 import { AppShell } from "../../layouts/AppShell";
 import { ActivityBar } from "../../components/ui/ActivityBar";
 import { LeftPanel } from "../sidebar/LeftPanel";
-
 import { Badge } from "../../components/ui/Badge";
-import { SkeletonCard } from "../../components/ui/SkeletonCard";
-import { Drawer } from "../../components/ui/Drawer";
-import type { ConfluenceSignalRow, SimulationResponse } from "../../services/signals/confluenceTableApi";
+import type { ConfluenceSignalRow, SimulationResponse, CoreId } from "../../services/signals/confluenceTableApi";
 import { useSignalStore } from "../../store/signals";
 import { useAppShellStore } from "../../store/appShell";
-
-const initialCores: CoreDefinition[] = [
-  { id: "technical", label: "Technical", description: "Momentum y estructura", enabled: true },
-  { id: "options", label: "Options", description: "Flujo y skew", enabled: true },
-  { id: "flow", label: "Institutional Flow", description: "UOA/bloques", enabled: true },
-  { id: "news", label: "News", description: "Sentimiento y eventos", enabled: true },
-  { id: "ai", label: "AI", description: "Confirmación IA", enabled: true }
-];
+import { useInstitutionalStore, setInstitutionalLoading, setInstitutionalResult, setInstitutionalError } from "../../store/institutional";
+import { getInstitutionalAnalysis } from "../../services/institutional/institutionalApi";
+import { formatCurrency } from "../../utils/format";
+import { Tooltip } from "../../components/ui/Tooltip";
 
 export function MainDashboard() {
   const isTestEnv = import.meta.env.MODE === "test";
   const [timeframe, setTimeframe] = useState("1d");
   const [periodRange, setPeriodRange] = useState<{ startDate: Date; endDate: Date } | null>(null);
-  const [instrumentsInput, setInstrumentsInput] = useState("AAPL,MSFT,NVDA,SPY");
-  const [cores, setCores] = useState<CoreDefinition[]>(initialCores);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [payload, setPayload] = useState<DashboardOrchestratorResponse | null>(null);
-  const [selectedSignal, setSelectedSignal] = useState<DashboardSignalCard | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [simulationRows, setSimulationRows] = useState<ConfluenceSignalRow[] | undefined>(undefined);
-  const [simulationVerdict, setSimulationVerdict] = useState<any | null>(null);
-  const [fundamentalSimulation, setFundamentalSimulation] = useState<AnalysisResult | null>(null);
-  const [evidenceDrawerOpen, setEvidenceDrawerOpen] = useState(false);
-  const [evidenceSignal, setEvidenceSignal] = useState<DashboardSignalCard | null>(null);
-  const { selectedInstrument, selectedSignal: storeSelectedRow, selectedOptionsStrategy, runtimeMode, operationalMode } = useSignalStore();
-  const { analysisCategory } = useAppShellStore();
+  const [simulationVerdict, setSimulationVerdict] = useState<{ verdict?: unknown; score?: number; degraded?: boolean } | null>(null);
+  const [activeSimulationStrategy, setActiveSimulationStrategy] = useState("IRON_CONDOR");
+  const [coverageRequest, setCoverageRequest] = useState<{ params: CoverageModalParams; kind: string } | null>(null);
+  const [institutionalCoreWasActive, setInstitutionalCoreWasActive] = useState(false);
+  const [copilotOpen, setCopilotOpen] = useState(false);
+  const [selectedStrikeData, setSelectedStrikeData] = useState<{
+    strike: number; type: "call" | "put"; premium: number; iv: number;
+  } | null>(null);
+  const [activeChartTab, setActiveChartTab] = useState<"chart" | "chain">("chart");
 
-  // FIC: Map analysis category chips to visible dashboard sections.
-  // FIC: Mapeo de chips de categoría de análisis a secciones visibles del dashboard.
-  const showTechnical = ["technical", "ai"].includes(analysisCategory);
-  const showOptions = ["options", "technical"].includes(analysisCategory);
-  const showAI = ["ai", "technical"].includes(analysisCategory);
-  const showInstitutional = analysisCategory === "institutional";
-  const showFundamental = analysisCategory === "fundamental";
-  const showNews = analysisCategory === "news";
+  const { selectedInstrument, selectedStrike, runtimeMode, operationalMode, setSelectedStrike } = useSignalStore();
+  const { setAnalysisCategory } = useAppShellStore();
+  const { results: institutionalResults, loading: institutionalLoading, errors: institutionalErrors } = useInstitutionalStore();
+
+  const selectedSymbol = selectedInstrument?.symbol ?? "SPY";
+
+  // FIC: Clear simulation results and institutional flag when the user selects a new ticker. (EN)
+  // FIC: Limpiar resultados de simulación y flag institucional cuando el usuario selecciona un nuevo ticker. (ES)
+  const prevSymbolRef = useRef(selectedSymbol);
+  useEffect(() => {
+    if (prevSymbolRef.current !== selectedSymbol) {
+      prevSymbolRef.current = selectedSymbol;
+      setSimulationRows(undefined);
+      setSimulationVerdict(null);
+      setInstitutionalCoreWasActive(false);
+    }
+  }, [selectedSymbol]);
 
   const handleSimulationResult = useCallback((result: SimulationResponse) => {
     setSimulationRows(result.table);
     setSimulationVerdict(result.verdict);
   }, []);
 
-  const handleFundamentalRows = useCallback((rows: ConfluenceSignalRow[]) => {
-    setSimulationRows((prev) => {
-      const existing = prev ?? [];
-      const withoutFundamental = existing.filter((r) => r.core !== "A_FUNDAMENTAL");
-      return [...withoutFundamental, ...rows];
-    });
-  }, []);
+  const handleCoverageConfirmed = useCallback(
+    (params: CoverageModalParams, kind: string) => setCoverageRequest({ params, kind }),
+    []
+  );
 
-  const handleProjectionResult = useCallback((result: AnalysisResult) => {
-    setFundamentalSimulation(result);
-  }, []);
+  // FIC: Writes selected strike to global store so CoverageStrategyModal can read it from anywhere. (EN)
+  // FIC: Escribe el strike seleccionado en el store global para que CoverageStrategyModal lo lea desde cualquier lugar. (ES)
+  const handleStrikeSelect = useCallback(
+    (strike: number, type: "call" | "put", premium: number, iv: number) => {
+      setSelectedStrikeData({ strike, type, premium, iv });
+      setSelectedStrike({ strike, type, premium, iv });
+    },
+    [setSelectedStrike]
+  );
 
-  const selectedSymbol = selectedInstrument?.symbol ?? payload?.cards[0]?.instrument ?? "SPY";
-  const activeStrategy = selectedOptionsStrategy?.name ?? (showFundamental ? "Long Call" : "SIN_ESTRATEGIA");
-  const activeCoreCount = useMemo(() => cores.filter((core) => core.enabled).length, [cores]);
+  // FIC: Called when user clicks Execute — fires institutional analysis if A_INSTITUCIONAL core is active. (EN)
+  // FIC: Llamado cuando el usuario hace clic en Ejecutar — dispara análisis institucional si el core A_INSTITUCIONAL está activo. (ES)
+  const handleSimulationExecute = useCallback((activeCoreIds: CoreId[]) => {
+    const institutionalActive = activeCoreIds.includes("A_INSTITUCIONAL");
+    setInstitutionalCoreWasActive(institutionalActive);
 
-  const refreshDashboard = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await getDashboardOrchestrator({ instruments: instrumentsInput, timeframe });
-      setPayload(response);
-      setSelectedSignal(response.cards[0] ?? null);
-      setLastUpdated(new Date());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo cargar dashboard");
-    } finally {
-      setLoading(false);
-    }
-  }, [instrumentsInput, timeframe]);
+    // Activate institutional columns in the confluence table immediately
+    if (institutionalActive) setAnalysisCategory("institutional");
 
-  useEffect(() => {
-    void refreshDashboard();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!institutionalActive || !selectedSymbol) return;
 
-  const toggleCore = (coreId: string) => {
-    setCores((prev) => prev.map((core) => (core.id === coreId ? { ...core, enabled: !core.enabled } : core)));
-  };
+    const controller = new AbortController();
+    setInstitutionalLoading(selectedSymbol, true);
+    getInstitutionalAnalysis(selectedSymbol, "daily", "medium", controller.signal)
+      .then((data) => setInstitutionalResult(selectedSymbol, data))
+      .catch((err) => {
+        if ((err as Error).name !== "AbortError") {
+          setInstitutionalError(selectedSymbol, (err as Error).message);
+        }
+      });
+    return () => controller.abort();
+  }, [selectedSymbol, setAnalysisCategory]);
 
-  // FIC: Badge color for runtime mode — cobalt for demo, warning for real, muted for offline.
-  // FIC: Color del badge según modo runtime — cobalt para demo, warning para real, apagado para offline.
+  // FIC: Badge color for runtime mode — cobalt for demo, warning for real, muted for offline. (EN)
   const modeBadgeColor =
     runtimeMode === "offline" ? "var(--color-text-muted)" :
     operationalMode === "real" ? "var(--color-warning)" :
@@ -123,197 +111,329 @@ export function MainDashboard() {
     operationalMode === "real" ? "Real" :
     "Demo";
 
+  // FIC: Placeholder section shown for analyses not yet implemented in this sprint. (EN)
+  // FIC: Sección placeholder para análisis no implementados aún en este sprint. (ES)
+  const PlaceholderSection = ({ title, description }: { title: string; description: string }) => (
+    <section className="card" style={{ padding: "var(--space-lg)", opacity: 0.5 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
+        <h2 style={{ margin: 0, fontSize: "var(--font-size-base)" }}>{title}</h2>
+        <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", background: "var(--color-surface-raised)", padding: "2px 8px", borderRadius: "var(--radius-xs)" }}>
+          Próximamente
+        </span>
+      </div>
+      <p style={{ margin: 0, fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)" }}>{description}</p>
+    </section>
+  );
+
+  const instData = institutionalResults[selectedSymbol.toUpperCase()];
+  const instIsLoading = institutionalLoading[selectedSymbol.toUpperCase()];
+  const instError = institutionalErrors[selectedSymbol.toUpperCase()];
+  const showInstitutionalSection = institutionalCoreWasActive;
+
   const mainContent = (
-    <div className="dashboard-main-content" style={{ padding: "var(--space-lg)", display: "grid", gap: "var(--space-lg)" }}>
-      {/* ── Nav bar row */}
-      <div className="dashboard-topbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+    <div style={{ padding: "var(--space-lg)", display: "grid", gap: "var(--space-lg)" }}>
+
+      {/* ── Top bar: logo + mode badge only */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
           <Badge label="FIC" color="var(--color-accent)" size="sm" />
           <span style={{ fontWeight: "var(--font-weight-bold)", fontSize: "var(--font-size-base)" }}>Inversions</span>
-          <span style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>Dashboard de Confluencia</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-md)" }}>
-          <Badge
-            label={modeBadgeLabel}
-            color={modeBadgeColor}
-            pulse={operationalMode === "real" && runtimeMode !== "offline"}
-          />
-          {lastUpdated && (
-            <span style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-xs)" }}>
-              Actualizado: {lastUpdated.toLocaleTimeString()}
+          {selectedInstrument && (
+            <span style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>
+              — {selectedInstrument.symbol}
+              {selectedInstrument.name && ` · ${selectedInstrument.name}`}
             </span>
           )}
         </div>
+        <Badge
+          label={modeBadgeLabel}
+          color={modeBadgeColor}
+          pulse={operationalMode === "real" && runtimeMode !== "offline"}
+        />
       </div>
 
-      {/* ── Filter bar */}
-      <div className="card">
-        <div className="dashboard-filter-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: "var(--space-sm)", alignItems: "end" }}>
-          <div>
-            <label style={{ display: "block", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "0.35rem", fontWeight: "var(--font-weight-emphasis)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Instrumentos
-            </label>
-            <input
-              value={instrumentsInput}
-              onChange={(e) => setInstrumentsInput(e.target.value)}
-              placeholder="AAPL, MSFT, NVDA, SPY"
-              onKeyDown={(e) => { if (e.key === "Enter") void refreshDashboard(); }}
-            />
-          </div>
-          <div>
-            <label style={{ display: "block", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "0.35rem", fontWeight: "var(--font-weight-emphasis)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Cores
-            </label>
-          <div className="dashboard-core-count" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "0.45rem 0.75rem", color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)", whiteSpace: "nowrap" }}>
-              {activeCoreCount} / {cores.length} activos
-            </div>
-          </div>
-          <button className="btn-primary" onClick={() => void refreshDashboard()} disabled={loading} style={{ height: "34px" }}>
-            {loading ? "Cargando…" : "Actualizar"}
-          </button>
-        </div>
-      </div>
-
-      {/* ── Core selector — always visible */}
-      <CoreSelector cores={cores} onToggle={toggleCore} />
-
-      {/* ── Runtime and chart controls — always visible */}
+      {/* ── Chart + Cadena de Opciones (tabs dentro de la misma card) ──── */}
       {!isTestEnv && (
         <div style={{ display: "grid", gap: "var(--space-sm)" }}>
-          <RuntimeModeSwitches />
-          <div className="card dashboard-controls-card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-sm)", flexWrap: "wrap" }}>
-            <IndicatorsMenu />
-            <TimeControls
-              symbol={selectedSymbol}
-              onTimeframeChange={(tf) => setTimeframe(tf)}
-              onPeriodChange={(_p, startDate, endDate) => setPeriodRange({ startDate, endDate })}
-            />
-          </div>
-        </div>
-      )}
+          <div className="card" style={{ overflow: "hidden" }}>
+            {/* Tab bar */}
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "2px",
+              padding: "var(--space-xs) var(--space-sm)",
+              borderBottom: "1px solid var(--color-border)",
+              background: "var(--color-surface)",
+            }}>
+              {(["chart", "chain"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveChartTab(tab)}
+                  style={{
+                    background: activeChartTab === tab ? "var(--color-surface-raised)" : "transparent",
+                    color: activeChartTab === tab ? "var(--color-text)" : "var(--color-text-muted)",
+                    border: activeChartTab === tab ? "1px solid var(--color-border)" : "1px solid transparent",
+                    borderRadius: "var(--radius-xs)",
+                    padding: "0.25rem 0.85rem",
+                    fontSize: "var(--font-size-xs)",
+                    fontWeight: activeChartTab === tab ? "var(--font-weight-bold)" as any : "normal",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  {tab === "chart" ? "Gráfico" : "Cadena de Opciones"}
+                </button>
+              ))}
 
-      {/* ── Error banner */}
-      {error && (
-        <div style={{ background: "rgba(226, 59, 74, 0.08)", border: "1px solid var(--color-sell)", borderRadius: "var(--radius-md)", padding: "0.75rem 1rem", color: "var(--color-sell)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <span style={{ fontWeight: "var(--font-weight-bold)" }}>Error:</span> {error}
-        </div>
-      )}
-
-      {/* ── Loading skeleton */}
-      {loading && !payload && (
-        <div style={{ display: "grid", gap: "var(--space-sm)", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
-          {[1, 2, 3, 4].map((n) => <SkeletonCard key={n} height={110} lines={3} />)}
-        </div>
-      )}
-
-      {/* ── Payload views */}
-      {payload && (
-        <div className="dashboard-panel-stack" style={{ display: "grid", gap: "var(--space-lg)" }}>
-
-          {/* FIC: SuperChart + simulation — always visible regardless of analysisCategory. */}
-          {/* FIC: SuperChart + simulación — siempre visible independientemente de analysisCategory. */}
-          {!isTestEnv && (
-            <div className="dashboard-panel-stack" style={{ display: "grid", gap: "var(--space-md)", gridTemplateColumns: "1fr" }}>
-              <div className="card dashboard-chart-card" style={{ minHeight: 380 }}>
-                <SuperChart symbol={selectedSymbol} timeframe={timeframe} startDate={periodRange?.startDate} endDate={periodRange?.endDate} />
+              {/* TimeControls integrado en la barra de tabs */}
+              <div style={{ marginLeft: "auto", display: "flex", alignItems: "center" }}>
+                <TimeControls
+                  symbol={selectedSymbol}
+                  onTimeframeChange={(tf) => setTimeframe(tf)}
+                  onPeriodChange={(_p, startDate, endDate) => setPeriodRange({ startDate, endDate })}
+                />
               </div>
-              <SimulationControlPanel
-                ticket={selectedSymbol}
-                onResult={handleSimulationResult}
-                onFundamentalRows={handleFundamentalRows}
-                onProjectionResult={handleProjectionResult}
-                isFundamentalMode={showFundamental}
-              />
-              {simulationVerdict && (
-                <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
-                  <strong>Verdict derivado:</strong>
-                  <span>
-                    {String(simulationVerdict.verdict)} (score {Number(simulationVerdict.score ?? 0).toFixed(3)})
-                    {simulationVerdict.degraded && <em style={{ color: "var(--color-text-muted)" }}> · degradado</em>}
+
+              {/* Strike seleccionado — visible en ambos tabs */}
+              {(() => {
+                const sd = selectedStrikeData ?? selectedStrike;
+                if (!sd) return null;
+                const isCall = sd.type === "call";
+                return (
+                  <span style={{
+                    marginLeft: "var(--space-sm)",
+                    fontSize: "var(--font-size-xs)",
+                    color: isCall ? "var(--color-buy)" : "var(--color-sell)",
+                    display: "flex", alignItems: "center", gap: "var(--space-sm)",
+                  }}>
+                    <span>Strike: ${sd.strike} {sd.type.toUpperCase()}</span>
+                    <span>Prima: ${sd.premium.toFixed(2)}</span>
+                    <span>IV: {(sd.iv * 100).toFixed(1)}%</span>
                   </span>
-                </div>
-              )}
-              {/* FIC: Projection panel shown after fundamental analysis execution. */}
-              {/* FIC: Panel de proyección visible tras ejecución de análisis fundamental. */}
-              {showFundamental && fundamentalSimulation?.projection && (
-                <ProjectionSimulationPanel projection={fundamentalSimulation.projection} />
-              )}
+                );
+              })()}
             </div>
-          )}
 
-          {/* FIC: Confluence table - visible for technical, options, institutional, fundamental and AI. */}
-          {/* FIC: Tabla de confluencia - visible para tecnico, opciones, institucional, fundamental e IA. */}
-          <div style={{ display: (showTechnical || showOptions || showInstitutional || showFundamental || showAI) ? "" : "none" }}>
-            <ConfluenceSignalsTable symbol={selectedSymbol} rows={simulationRows} activeStrategy={activeStrategy} />
+            {/* Chart tab */}
+            <div style={{ display: activeChartTab === "chart" ? "block" : "none", minHeight: 380 }}>
+              <SuperChart symbol={selectedSymbol} timeframe={timeframe} startDate={periodRange?.startDate} endDate={periodRange?.endDate} />
+            </div>
+
+            {/* Chain tab */}
+            <div style={{
+              display: activeChartTab === "chain" ? "flex" : "none",
+              flexDirection: "column",
+              height: 420,
+              padding: "var(--space-md)",
+            }}>
+              <OptionChainTableConnected onSelectStrike={handleStrikeSelect} />
+            </div>
           </div>
 
-          {/* FIC: Signal overlay and explainability — technical and AI categories. */}
-          {/* FIC: Overlay de señales y explicabilidad — categorías técnico e IA. */}
-          <div style={{ display: (showTechnical || showAI) ? "" : "none" }}>
-            <SignalOverlay
-              cards={payload.cards}
-              onCardClick={(card) => {
-                setEvidenceSignal(card);
-                setEvidenceDrawerOpen(true);
-              }}
-            />
-          </div>
-
-          {/* FIC: AI explainability table — visible for technical and AI categories. */}
-          {/* FIC: Tabla de explicabilidad IA — visible para categorías técnico e IA. */}
-          <div style={{ display: showAI ? "" : "none" }}>
-            <ExplainabilityTable cards={payload.cards} />
-          </div>
-
-          {/* FIC: Inline evidence — test env only; Drawer handles production evidence display. */}
-          {/* FIC: Evidencia inline — solo en test; el Drawer maneja la evidencia en producción. */}
-          {isTestEnv && (
-            <div className="card">
-              <div style={{ marginBottom: "0.75rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <h2>Detalle de evidencia</h2>
-                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                  {payload.cards.map((card) => (
-                    <button
-                      key={card.signalId}
-                      className={`btn-ghost ${selectedSignal?.signalId === card.signalId ? "active" : ""}`}
-                      onClick={() => setSelectedSignal(card)}
-                    >
-                      {card.instrument}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <SignalEvidencePanel evidence={selectedSignal?.evidence ?? []} />
-              {storeSelectedRow && Array.isArray((storeSelectedRow.metadata as any)?.evidencia_refs) && (
-                <div style={{ marginTop: "0.75rem", padding: "0.5rem 0.75rem", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)" }}>
-                  <strong style={{ fontSize: "0.8rem" }}>Evidencia de la fila seleccionada</strong>
-                  <ul style={{ margin: "0.4rem 0 0 1rem", padding: 0, fontSize: "0.75rem" }}>
-                    {((storeSelectedRow.metadata as any).evidencia_refs as string[]).map((ref, i) => (
-                      <li key={`${ref}-${i}`}>{ref}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* FIC: News section placeholder. */}
-          {showNews && (
-            <div style={{ textAlign: "center", padding: "4rem 2rem", color: "var(--color-text-muted)" }}>
-              <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>🚧</div>
-              <p style={{ fontWeight: "var(--font-weight-emphasis)" }}>Esta sección estará disponible próximamente</p>
-              <p style={{ fontSize: "var(--font-size-sm)", marginTop: "0.5rem" }}>Categoría: Noticias</p>
-            </div>
-          )}
         </div>
       )}
 
-      {!payload && !loading && (
-        <div style={{ textAlign: "center", padding: "4rem 2rem", color: "var(--color-text-muted)" }}>
-          <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>📊</div>
-          <p>Cargando datos de confluencia…</p>
+      {/* ── Simulation control — cores + indicators + execute */}
+      <SimulationControlPanel
+        ticket={selectedSymbol}
+        onResult={handleSimulationResult}
+        onExecute={handleSimulationExecute}
+        onStrategyChange={setActiveSimulationStrategy}
+        onCoverageParamsConfirmed={handleCoverageConfirmed}
+      />
+
+      {/* ── Simulation verdict */}
+      {simulationVerdict && (
+        <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
+          <strong>Verdict derivado:</strong>
+          <span>
+            {String(simulationVerdict.verdict)} (score {Number(simulationVerdict.score ?? 0).toFixed(3)})
+            {simulationVerdict.degraded && <em style={{ color: "var(--color-text-muted)" }}> · degradado</em>}
+          </span>
         </div>
       )}
+
+      {/* ── Confluence table — empty state until simulation runs */}
+      {simulationRows === undefined ? (
+        <section className="card" style={{ padding: "var(--space-xl)", textAlign: "center", color: "var(--color-text-muted)" }}>
+          <p style={{ fontWeight: "var(--font-weight-emphasis)", marginBottom: "var(--space-xs)" }}>
+            Selecciona un instrumento y ejecuta la simulación
+          </p>
+          <p style={{ fontSize: "var(--font-size-sm)" }}>
+            Configura los cores y presiona Ejecutar para ver la tabla de confluencia.
+          </p>
+        </section>
+      ) : (
+        <ConfluenceSignalsTable symbol={selectedSymbol} rows={simulationRows} activeStrategy={activeSimulationStrategy} />
+      )}
+
+      {/* ── Institutional analysis section */}
+      {showInstitutionalSection && (
+        <section className="card" style={{ padding: "var(--space-lg)" }}>
+          <h2 style={{ margin: "0 0 var(--space-md)" }}>Análisis Institucional — {selectedSymbol}</h2>
+          {instIsLoading && (
+            <p style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>
+              Cargando análisis institucional…
+            </p>
+          )}
+          {instError && !instIsLoading && (
+            <p style={{ color: "var(--color-sell)", fontSize: "var(--font-size-sm)" }}>
+              Error: {instError}
+            </p>
+          )}
+          {instData && !instIsLoading && (() => {
+            const uniqueSources = [
+              ...new Map(instData.sourceReports.map((s) => [s.sourceId, s])).values(),
+            ];
+            const ownershipPct = instData.metrics?.fundsOwnershipPct ?? 0;
+            const ownershipColor =
+              ownershipPct >= 70 ? "var(--color-buy)" : ownershipPct >= 40 ? "var(--color-hold)" : "var(--color-sell)";
+            const ownershipLabel = ownershipPct >= 70 ? "Alto" : ownershipPct >= 40 ? "Medio" : "Bajo";
+            const netFlow = instData.metrics?.netFlow ?? 0;
+            const days = instData.expiration?.daysToNextOpex ?? 0;
+            const opexDate = new Date(Date.now() + days * 86_400_000);
+            const opexStr = opexDate.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+            const visibleSources = uniqueSources.slice(0, 3);
+            const hiddenSources = uniqueSources.slice(3);
+            const trendDir = instData.trends?.direction;
+            const trendColor =
+              trendDir === "bullish" ? "var(--color-buy)" :
+              trendDir === "bearish" ? "var(--color-sell)" :
+              "var(--color-text-muted)";
+
+            return (
+              <>
+                {/* Row 1 — key metrics */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 0, marginBottom: "var(--space-md)" }}>
+                  {/* Tendencia */}
+                  <div style={{ paddingRight: "var(--space-md)", borderRight: "1px solid var(--color-border-subtle)" }}>
+                    <p style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-text-muted)", margin: "0 0 4px", fontWeight: 600 }}>Tendencia</p>
+                    <p style={{ fontSize: 14, fontWeight: 600, margin: 0, color: trendColor }}>
+                      {trendDir === "bullish" ? "▲ Bullish" : trendDir === "bearish" ? "▼ Bearish" : instData.trends ? "— Neutral" : "—"}
+                    </p>
+                  </div>
+
+                  {/* Zonas detectadas */}
+                  <div style={{ paddingLeft: "var(--space-md)", paddingRight: "var(--space-md)", borderRight: "1px solid var(--color-border-subtle)" }}>
+                    <p style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-text-muted)", margin: "0 0 4px", fontWeight: 600 }}>Zonas detectadas</p>
+                    <p style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>
+                      {instData.zones ? `${instData.zones.support.length}S · ${instData.zones.resistance.length}R` : "—"}
+                    </p>
+                  </div>
+
+                  {/* Ownership institucional */}
+                  <div style={{ paddingLeft: "var(--space-md)", paddingRight: "var(--space-md)", borderRight: "1px solid var(--color-border-subtle)" }}>
+                    <p style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-text-muted)", margin: "0 0 4px", fontWeight: 600 }}>Ownership inst.</p>
+                    <p style={{ fontSize: 14, fontWeight: 600, margin: "0 0 4px" }}>
+                      {ownershipPct.toFixed(1)}%{" "}
+                      <span style={{ fontSize: 10, fontWeight: 600, color: ownershipColor }}>{ownershipLabel}</span>
+                    </p>
+                    <div style={{ width: "100%", height: 4, backgroundColor: "var(--color-surface-raised)", borderRadius: "var(--radius-pill)", overflow: "hidden" }}>
+                      <div style={{ width: `${Math.min(ownershipPct, 100)}%`, height: "100%", backgroundColor: ownershipColor, borderRadius: "var(--radius-pill)" }} />
+                    </div>
+                  </div>
+
+                  {/* Net Flow */}
+                  <div style={{ paddingLeft: "var(--space-md)" }}>
+                    <p style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-text-muted)", margin: "0 0 4px", fontWeight: 600 }}>Net Flow</p>
+                    <p style={{ fontSize: 14, fontWeight: 600, margin: 0, color: netFlow >= 0 ? "var(--color-buy)" : "var(--color-sell)" }}>
+                      {netFlow >= 0 ? "▲ " : "▼ "}{formatCurrency(netFlow)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Row 2 — metadata */}
+                <div style={{ display: "flex", gap: "var(--space-xl)", borderTop: "1px solid var(--color-border-subtle)", paddingTop: "var(--space-sm)", alignItems: "center", flexWrap: "wrap" }}>
+                  {instData.expiration && (
+                    <div>
+                      <p style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-text-muted)", margin: "0 0 2px", fontWeight: 600 }}>Próximo OpEx</p>
+                      <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>{opexStr} · {days}d</p>
+                    </div>
+                  )}
+                  <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-text-muted)", fontWeight: 600, marginRight: "var(--space-xs)" }}>
+                      Fuentes
+                    </span>
+                    {visibleSources.map((s) => {
+                      const label =
+                        s.sourceId === "yahoo_chart" ? "Chart" :
+                        s.sourceId === "sec_edgar_13f" ? "SEC 13F" :
+                        s.sourceId === "finra_short_interest" ? "FINRA" :
+                        s.sourceId === "yahoo_options_flow" ? "Options" :
+                        s.sourceId === "yahoo_institutional" ? "Inst." :
+                        s.sourceId.split("_")[0];
+                      const borderColor =
+                        s.status === "ok" ? "var(--color-buy)" :
+                        s.status === "partial" ? "var(--color-warning)" :
+                        "var(--color-border)";
+                      const bg =
+                        s.status === "ok" ? "rgba(0,168,126,0.10)" :
+                        s.status === "partial" ? "rgba(236,126,0,0.10)" :
+                        "rgba(255,255,255,0.04)";
+                      const color =
+                        s.status === "ok" ? "var(--color-buy)" :
+                        s.status === "partial" ? "var(--color-warning)" :
+                        "var(--color-text-muted)";
+                      return (
+                        <span
+                          key={s.sourceId}
+                          style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", padding: "2px 6px", borderRadius: "var(--radius-xs)", border: `1px solid ${borderColor}`, backgroundColor: bg, color, fontWeight: 600, lineHeight: "1.5" }}
+                        >
+                          {label}
+                        </span>
+                      );
+                    })}
+                    {hiddenSources.length > 0 && (
+                      <Tooltip
+                        content={hiddenSources.map((s) =>
+                          s.sourceId === "yahoo_chart" ? "Chart" :
+                          s.sourceId === "sec_edgar_13f" ? "SEC 13F" :
+                          s.sourceId === "finra_short_interest" ? "FINRA" :
+                          s.sourceId === "yahoo_options_flow" ? "Options" :
+                          s.sourceId === "yahoo_institutional" ? "Inst." :
+                          s.sourceId.split("_")[0]
+                        ).join("\n")}
+                      >
+                        <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", padding: "2px 6px", borderRadius: "var(--radius-xs)", border: "1px solid var(--color-border)", backgroundColor: "rgba(255,255,255,0.04)", color: "var(--color-text-muted)", fontWeight: 600, cursor: "default", lineHeight: "1.5" }}>
+                          +{hiddenSources.length}
+                        </span>
+                      </Tooltip>
+                    )}
+                    <Tooltip content="Haz clic en una fila de la tabla de confluencia para ver el detalle completo.">
+                      <span style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)", marginLeft: "var(--space-xs)", cursor: "default" }}>
+                        ⓘ
+                      </span>
+                    </Tooltip>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+        </section>
+      )}
+
+      {/* ── Strategy breakdown section — only visible after simulation has run */}
+      {simulationRows !== undefined && (
+        <SimulatorStrategySection
+          ticker={selectedSymbol}
+          activeStrategy={activeSimulationStrategy}
+          coverageRequest={coverageRequest}
+        />
+      )}
+
+      {/* ── Placeholder sections — reserved for other teams */}
+      <PlaceholderSection
+        title="Análisis Técnico Extendido"
+        description="Señales de indicadores técnicos avanzados, patrones de velas y análisis de estructura de mercado."
+      />
+      <PlaceholderSection
+        title="Análisis Fundamental"
+        description="Métricas financieras, earnings, valuación y comparativa sectorial."
+      />
+      <PlaceholderSection
+        title="Noticias y Sentimiento"
+        description="Sentimiento del mercado, noticias relevantes y análisis de redes sociales."
+      />
     </div>
   );
 
@@ -323,19 +443,36 @@ export function MainDashboard() {
         activityBar={<ActivityBar />}
         leftPanel={<LeftPanel />}
         main={mainContent}
-
       />
 
-      {/* FIC: Evidence drawer — slide-in from right, opens on signal card click. */}
-      {/* FIC: Drawer de evidencia — desliza desde la derecha, se abre al clic en tarjeta de señal. */}
-      <Drawer
-        isOpen={evidenceDrawerOpen}
-        onClose={() => setEvidenceDrawerOpen(false)}
-        position="right"
-        title={evidenceSignal ? `Evidencia — ${evidenceSignal.instrument}` : "Evidencia"}
+      {/* FAB — Copilot IA */}
+      <style>{`.fab-btn:hover{transform:scale(1.08);box-shadow:0 6px 20px rgba(73,79,223,0.55)}@media(prefers-reduced-motion:reduce){.fab-btn{transition:none!important}}`}</style>
+      <button
+        className="fab-btn"
+        onClick={() => setCopilotOpen(true)}
+        title="Abrir Copilot IA"
+        style={{
+          position: "fixed",
+          bottom: "1.5rem",
+          right: "1.5rem",
+          width: "56px",
+          height: "56px",
+          borderRadius: "50%",
+          background: "var(--color-accent)",
+          border: "none",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 4px 16px rgba(73, 79, 223, 0.5)",
+          zIndex: 900,
+          transition: "transform var(--duration-normal) var(--easing-standard), box-shadow var(--duration-normal) var(--easing-standard)"
+        }}
       >
-        <SignalEvidencePanel evidence={evidenceSignal?.evidence ?? []} />
-      </Drawer>
+        <MessageSquare size={24} color="#ffffff" />
+      </button>
+
+      <GlobalChatDrawer isOpen={copilotOpen} onClose={() => setCopilotOpen(false)} />
     </>
   );
 }

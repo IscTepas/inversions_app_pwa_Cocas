@@ -17,24 +17,13 @@ export interface SelectedSignal {
   metadata?: Record<string, unknown>;
 }
 
-export interface SelectedOptionsStrategy {
-  id: "short-put" | "long-put" | "short-call" | "long-call";
-  name: "Short Put" | "Long Put" | "Short Call" | "Long Call";
-}
-
-export interface OptionsStrategyParams {
-  ticker: string;
-  strikePrice: number;
-  currentPrice: number;
-  premiumPerContract: number;
-  numberOfContracts: number;
-  expirationDate: string;
-  availableCapital: number;
-  assumptions?: {
-    impliedVolatility?: number;
-    timeDecayModel?: "LINEAR" | "EXPONENTIAL";
-    interestRate?: number;
-  };
+// FIC: Strike selected from OptionChainTable — shared via store so CoverageStrategyModal can read it. (EN)
+// FIC: Strike seleccionado de OptionChainTable — compartido via store para que CoverageStrategyModal lo lea. (ES)
+export interface SelectedStrike {
+  strike: number;
+  type: "call" | "put";
+  premium: number;
+  iv: number;
 }
 
 type RuntimeMode = "online" | "offline";
@@ -43,8 +32,7 @@ type OperationalMode = "demo" | "real";
 interface SignalStoreState {
   selectedInstrument?: SelectedInstrument;
   selectedSignal?: SelectedSignal;
-  selectedOptionsStrategy?: SelectedOptionsStrategy;
-  optionsStrategyParams?: OptionsStrategyParams;
+  selectedStrike?: SelectedStrike;
   runtimeMode: RuntimeMode;
   operationalMode: OperationalMode;
 }
@@ -63,11 +51,10 @@ const initialOperationalMode =
     (window.localStorage.getItem("inversions.runtime.operational") as OperationalMode | null)) ||
   "demo";
 
-const state: SignalStoreState = {
+// useSyncExternalStore requires a new object reference on each update so React detects the change.
+let state: SignalStoreState = {
   selectedInstrument: undefined,
   selectedSignal: undefined,
-  selectedOptionsStrategy: undefined,
-  optionsStrategyParams: undefined,
   runtimeMode: initialRuntimeMode,
   operationalMode: initialOperationalMode
 };
@@ -93,30 +80,26 @@ export function useSignalStore() {
   return {
     ...snapshot,
     setSelectedInstrument: (instrument: SelectedInstrument) => {
-      state.selectedInstrument = instrument;
+      state = { ...state, selectedInstrument: instrument };
       emit();
     },
     setSelectedSignal: (signal: SelectedSignal) => {
-      state.selectedSignal = signal;
+      state = { ...state, selectedSignal: signal };
       emit();
     },
-    setSelectedOptionsStrategy: (strategy: SelectedOptionsStrategy) => {
-      state.selectedOptionsStrategy = strategy;
-      emit();
-    },
-    setOptionsStrategyParams: (params: OptionsStrategyParams) => {
-      state.optionsStrategyParams = params;
+    setSelectedStrike: (strike: SelectedStrike | undefined) => {
+      state = { ...state, selectedStrike: strike };
       emit();
     },
     setRuntimeMode: (mode: RuntimeMode) => {
-      state.runtimeMode = mode;
+      state = { ...state, runtimeMode: mode };
       if (typeof window !== "undefined") {
         window.localStorage.setItem("inversions.runtime.mode", mode);
       }
       emit();
     },
     setOperationalMode: (mode: OperationalMode) => {
-      state.operationalMode = mode;
+      state = { ...state, operationalMode: mode };
       if (typeof window !== "undefined") {
         window.localStorage.setItem("inversions.runtime.operational", mode);
       }

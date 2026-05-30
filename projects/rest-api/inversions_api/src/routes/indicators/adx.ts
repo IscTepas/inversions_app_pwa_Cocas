@@ -10,7 +10,7 @@ import type { Timeframe } from "../../modules/indicators/types";
 
 export const adxRouter = Router();
 
-adxRouter.get("/adx", (req, res) => {
+adxRouter.get("/adx", async (req, res) => {
   const symbol = String(req.query.symbol ?? "").toUpperCase();
   const timeframeRaw = String(req.query.timeframe ?? "1h");
   const periodRaw = Number(req.query.period ?? 14);
@@ -36,7 +36,7 @@ adxRouter.get("/adx", (req, res) => {
   }
 
   const timeframe = timeframeRaw as Timeframe;
-  const candles = getCandles({ symbol, timeframe, count: countRaw });
+  const candles = await getCandles({ symbol, timeframe, count: countRaw });
 
   if (candles.length === 0) {
     return respondError(res, 404, "symbol_not_found", `No hay datos OHLC para '${symbol}'.`);

@@ -19,6 +19,7 @@ import { ExpirationAnalysisEngine } from "../../modules/institutional/expiration
 import { parseSecEdgar13fReal, parseFinraShortInterestReal, ensureFinraCache } from "../../modules/institutional/realSourceParsers";
 import { parseYahooOptionsFlow } from "../../modules/institutional/yahooOptionsParser";
 import { parseYahooInstitutional } from "../../modules/institutional/yahooInstitutionalParser";
+import { parseYahooChart } from "../../modules/institutional/yahooChartParser";
 import { getYahooSession } from "../../modules/institutional/yahooCrumbSession";
 
 // ─── Route context (singleton) ────────────────────────────────────────────────
@@ -39,29 +40,36 @@ export function getInstitutionalRouteContext(): InstitutionalRouteContext {
 
   const sources: DataSourceConfig[] = [
     {
-      sourceId: "sec_edgar_13f",
+      sourceId: "yahoo_chart",
       priority: 1,
+      cacheTtlMs: 300_000,
+      rateLimit: { maxRequests: 30, windowMs: 60_000 },
+      parse: parseYahooChart,
+    },
+    {
+      sourceId: "sec_edgar_13f",
+      priority: 2,
       cacheTtlMs: 600_000,
       rateLimit: { maxRequests: 10, windowMs: 60_000 },
       parse: parseSecEdgar13fReal,
     },
     {
       sourceId: "finra_short_interest",
-      priority: 2,
+      priority: 3,
       cacheTtlMs: 600_000,
       rateLimit: { maxRequests: 10, windowMs: 60_000 },
       parse: parseFinraShortInterestReal,
     },
     {
       sourceId: "yahoo_options_flow",
-      priority: 3,
+      priority: 4,
       cacheTtlMs: 120_000,
       rateLimit: { maxRequests: 20, windowMs: 60_000 },
       parse: parseYahooOptionsFlow,
     },
     {
       sourceId: "yahoo_institutional",
-      priority: 4,
+      priority: 5,
       cacheTtlMs: 300_000,
       rateLimit: { maxRequests: 20, windowMs: 60_000 },
       parse: parseYahooInstitutional,
@@ -70,10 +78,13 @@ export function getInstitutionalRouteContext(): InstitutionalRouteContext {
 
   const dataService = new InstitutionalDataService(sources);
 
-  // FIC: Pre-warm FINRA cache and Yahoo session in background — first real request arrives with warm caches. (EN)
-  // FIC: Pre-calienta caché FINRA y sesión Yahoo en background — el primer request llega con cachés calientes. (ES)
+  // FIC: Pre-warm caches in background — first real request arrives with warm data. (EN)
+  // FIC: Pre-calienta cachés en background — el primer request llega con datos calientes. (ES)
   ensureFinraCache().catch(() => {});
   getYahooSession().catch(() => {});
+  // Pre-warm chart cache for the two most common tickers
+  dataService.resolveSingleSource(sources[0], "SPY", "daily").catch(() => {});
+  dataService.resolveSingleSource(sources[0], "QQQ", "daily").catch(() => {});
 
   _context = {
     dataService,
@@ -85,24 +96,13 @@ export function getInstitutionalRouteContext(): InstitutionalRouteContext {
   return _context;
 }
 
-// ─── Synthetic contract builder ───────────────────────────────────────────────
+// ─── Contract builder ─────────────────────────────────────────────────────────
 
-const PERIOD_FACTOR: Record<InstitutionalAnalysisPeriod, number> = {
-  intraday: 0.15,
-  daily: 0.35,
-  weekly: 0.65,
-  monthly: 1.0,
-  quarterly: 1.5,
-};
-
-const HORIZON_FACTOR: Record<InstitutionalHorizon, number> = {
-  short: 0.6,
-  medium: 1.0,
-  long: 1.4,
-};
-
-// FIC: Build an InstitutionalAnalysisContract with deterministic synthetic values from query params. (EN)
-// FIC: Construye un InstitutionalAnalysisContract con valores sintéticos deterministas desde query params. (ES)
+// FIC: Build an InstitutionalAnalysisContract with zero-based defaults — engines override with real data. (EN)
+// FIC: Construye un InstitutionalAnalysisContract con defaults en cero — los engines los sobrescriben con datos reales. (ES)
+// Volume, fundsOwnershipPct, inflows and outflows start at 0 so that when real institutional
+// sources (SEC 13F, FINRA, Yahoo) succeed they fully override these values. If sources fail,
+// the metrics show 0 ("unknown") rather than fabricated numbers.
 export function buildInstitutionalAnalysisContractFromRequest(
   req: Request
 ): InstitutionalAnalysisContract {
@@ -115,37 +115,17 @@ export function buildInstitutionalAnalysisContractFromRequest(
   const safePeriod = validPeriods.includes(period) ? period : "daily";
   const safeHorizon = validHorizons.includes(horizon) ? horizon : "medium";
 
-  // FIC: Deterministic seed from ticker character codes — same ticker always yields same values. (EN)
-  // FIC: Semilla determinista desde códigos de caracteres del ticker — mismo ticker = mismos valores. (ES)
-  const seed = ticker.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-
-  const pf = PERIOD_FACTOR[safePeriod];
-  const hf = HORIZON_FACTOR[safeHorizon];
-
-  const volume = Math.round(900_000 + seed * 850 * pf * hf);
-  const liquidity = volume >= 2_000_000 ? "high" : volume >= 1_200_000 ? "medium" : "low";
-
-  const fundsOwnershipPct = 18 + (seed % 34) + (hf > 1 ? 4 : 0) + (pf > 1 ? 3 : 0);
-  const inflows = volume * (0.34 + (seed % 10) * 0.008);
-  const outflows = volume * (0.18 + (seed % 7) * 0.005);
-
   return createInstitutionalAnalysisContract({
     ticker,
     period: safePeriod,
-    volume,
-    liquidity,
     horizon: safeHorizon,
-    fundsOwnershipPct: Math.min(fundsOwnershipPct, 95),
-    flows: {
-      inflows,
-      outflows,
-      asOf: new Date().toISOString(),
-    },
-    openPositions: {
-      count: 50 + (seed % 200),
-      notional: volume * 12,
-    },
-    sourceIds: ["sec_edgar_13f", "finra_short_interest", "yahoo_options_flow", "yahoo_institutional"],
+    // FIC: All market metrics default to 0 — real values come from data sources resolved by the engines. (EN)
+    volume: 0,
+    liquidity: "low",
+    fundsOwnershipPct: 0,
+    flows: { inflows: 0, outflows: 0, asOf: new Date().toISOString() },
+    openPositions: { count: 0, notional: 0 },
+    sourceIds: ["yahoo_chart", "sec_edgar_13f", "finra_short_interest", "yahoo_options_flow", "yahoo_institutional"],
     requestedAt: new Date().toISOString(),
     analysisId: randomUUID(),
   });
@@ -194,21 +174,34 @@ export function buildInstitutionalMetricsSummary(contract: InstitutionalAnalysis
 
 // FIC: Build an institutional positions summary for API responses (regulatory/13F view). (EN)
 // FIC: Construye un resumen de posiciones institucionales para respuestas API (vista regulatoria/13F). (ES)
-export function buildInstitutionalPositionsSummary(contract: InstitutionalAnalysisContract) {
+export function buildInstitutionalPositionsSummary(
+  contract: InstitutionalAnalysisContract,
+  merged?: {
+    fundsOwnershipPct?: number;
+    flows?: { inflows: number; outflows: number; asOf?: string };
+    openPositions?: { count: number; notional?: number };
+  }
+) {
+  const ownership = merged?.fundsOwnershipPct ?? contract.fundsOwnershipPct;
+  const inflows   = merged?.flows?.inflows    ?? contract.flows.inflows;
+  const outflows  = merged?.flows?.outflows   ?? contract.flows.outflows;
+  const count     = merged?.openPositions?.count    ?? contract.openPositions.count;
+  const notional  = merged?.openPositions?.notional ?? contract.openPositions.notional;
+
   return {
     ticker: contract.ticker,
     positions13F: contract.sourceIds?.map((sourceId) => ({
       sourceId,
       asOf: contract.flows.asOf,
-      count: contract.openPositions.count,
-      notional: contract.openPositions.notional ?? 0,
-      ownership: contract.fundsOwnershipPct,
+      count,
+      notional: notional ?? 0,
+      ownership,
       confidence: 0.80,
     })) ?? [],
     flows: {
-      inflows: contract.flows.inflows,
-      outflows: contract.flows.outflows,
-      netFlow: contract.flows.inflows - contract.flows.outflows,
+      inflows,
+      outflows,
+      netFlow: inflows - outflows,
     },
   };
 }

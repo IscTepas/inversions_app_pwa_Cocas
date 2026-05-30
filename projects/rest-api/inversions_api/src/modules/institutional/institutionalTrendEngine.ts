@@ -3,10 +3,10 @@
 
 import type { InstitutionalAnalysisContract } from "./institutionalContract";
 import type { InstitutionalResolveResult } from "./institutionalDataService";
+import type { RealCandle } from "./yahooChartParser";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const DEFAULT_MIN_CANDLES = 200;
 const FAST_MA = 50;
 const SLOW_MA = 200;
 const VOLUME_LOOKBACK = 20;
@@ -41,21 +41,69 @@ interface Candle { close: number; volume: number }
 // ─── Engine ───────────────────────────────────────────────────────────────────
 
 export class InstitutionalTrendEngine {
+  // FIC: Extract real candles from yahoo_chart observation in preResolvedResult. (EN)
+  // FIC: Extrae velas reales de la observación yahoo_chart en preResolvedResult. (ES)
+  private extractRealCandles(preResolvedResult?: InstitutionalResolveResult): Candle[] | null {
+    const chartObs = preResolvedResult?.observations.find(
+      (o) => o.sourceId === "yahoo_chart" && o.status !== "failed"
+    );
+    if (!chartObs?.rawSourceData) return null;
+    const raw = chartObs.rawSourceData["candles"];
+    if (!Array.isArray(raw) || raw.length < 20) return null;
+    const candles = raw as RealCandle[];
+    return candles.map((c) => ({ close: c.close, volume: c.volume }));
+  }
+
   // FIC: Main analysis — computes SMAs, crossover, Pearson volume correlation, trend strength. (EN)
   // FIC: Análisis principal — calcula SMAs, cruce, correlación de Pearson con volumen, fuerza de tendencia. (ES)
   async analyze(
     request: InstitutionalAnalysisContract,
     preResolvedResult?: InstitutionalResolveResult
   ): Promise<InstitutionalTrendResult> {
-    const candles = this.buildFallbackCandles(request.ticker);
+    const realCandles = this.extractRealCandles(preResolvedResult);
+
+    if (!realCandles || realCandles.length < 20) {
+      // FIC: No real candles available — return neutral result instead of synthetic data. (EN)
+      // FIC: Sin velas reales disponibles — retorna resultado neutral en lugar de datos sintéticos. (ES)
+      return {
+        ticker: request.ticker,
+        direction: "neutral",
+        sma50: 0,
+        sma200: 0,
+        trendStrength: 0,
+        continuityProbability: 0.5,
+        institutionalScore: 0.2,
+        volumeCorrelation: 0,
+        candlesAnalyzed: 0,
+        analyzedAt: new Date().toISOString(),
+      };
+    }
+
+    const candles = realCandles;
+    console.log(
+      "[TrendEngine] candles received:", realCandles.length,
+      "using:", candles.length > 0 ? "real" : "fallback"
+    );
+
     const closes = candles.map((c) => c.close);
     const volumes = candles.map((c) => c.volume);
 
     const sma50Series = computeSma(closes, FAST_MA);
     const sma200Series = computeSma(closes, SLOW_MA);
 
-    const lastSma50 = lastValid(sma50Series) ?? 0;
-    const lastSma200 = lastValid(sma200Series) ?? 0;
+    const meanClose = closes.length > 0
+      ? closes.reduce((s, p) => s + p, 0) / closes.length
+      : 0;
+
+    // FIC: If fewer candles than the period, use mean of available closes instead of 0. (EN)
+    // FIC: Si hay menos velas que el período, usa la media de las velas disponibles en lugar de 0. (ES)
+    const lastSma50 = closes.length >= FAST_MA
+      ? (lastValid(sma50Series) ?? meanClose)
+      : closes.length > 0 ? meanClose : 0;
+
+    const lastSma200 = closes.length >= SLOW_MA
+      ? (lastValid(sma200Series) ?? meanClose)
+      : closes.length > 0 ? meanClose : 0;
 
     const crossover = this.detectCrossover(sma50Series, sma200Series);
 
@@ -108,37 +156,6 @@ export class InstitutionalTrendEngine {
       volumeCorrelation,
       candlesAnalyzed: candles.length,
       analyzedAt: new Date().toISOString(),
-    };
-  }
-
-  // FIC: Build 200+ fallback candles using seeded LCG PRNG — same ticker = same sequence. (EN)
-  // FIC: Genera 200+ velas de respaldo con PRNG LCG seeded — mismo ticker = misma secuencia. (ES)
-  private buildFallbackCandles(ticker: string, count = DEFAULT_MIN_CANDLES): Candle[] {
-    const seed = ticker.split("").reduce((s, c) => s + c.charCodeAt(0), 0);
-    const rand = this.seededRandom(seed);
-
-    const basePrice = 100 + (seed % 900);
-    const baseVol = 500_000 + seed * 1_000;
-    const candles: Candle[] = [];
-    let price = basePrice;
-
-    for (let i = 0; i < count; i++) {
-      const drift = (rand() - 0.5) * 0.02; // ±1% random daily drift
-      price = Math.max(price * (1 + drift), 1);
-      const volume = baseVol * (0.7 + rand() * 0.6);
-      candles.push({ close: price, volume });
-    }
-    return candles;
-  }
-
-  // FIC: Seeded LCG PRNG — deterministic sequence for a given seed value. (EN)
-  // FIC: PRNG LCG con seed — secuencia determinista para un valor de seed dado. (ES)
-  // Algorithm: s = Math.imul(s, 1664525) + 1013904223 | 0
-  private seededRandom(seed: number): () => number {
-    let s = seed | 0;
-    return () => {
-      s = (Math.imul(s, 1664525) + 1013904223) | 0;
-      return (s >>> 0) / 0xffffffff;
     };
   }
 

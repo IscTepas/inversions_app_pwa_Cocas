@@ -28,6 +28,10 @@ export interface CoverageStrategyContract {
   capital: number;
   riskTolerancePct: number; // 0–1, e.g. 0.05 = 5%
   requestedAt: string; // ISO timestamp
+  // FIC: Real market params — set by analyze/simulate routes from live option chain. (EN)
+  // FIC: Parámetros reales del mercado — asignados por las rutas desde la cadena de opciones en vivo. (ES)
+  iv?: number;  // implied volatility (annualized), e.g. 0.32 = 32%
+  dte?: number; // days to expiration of the primary leg
 }
 
 /** Single point on a payoff diagram / Punto en el diagrama de payoff */

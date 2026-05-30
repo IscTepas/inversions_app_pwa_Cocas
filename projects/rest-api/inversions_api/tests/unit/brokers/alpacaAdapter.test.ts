@@ -14,10 +14,10 @@ describe("Alpaca adapter", () => {
 
   it("retries and throws normalized timeout/network errors", async () => {
     const adapter = new AlpacaAdapter("k", "s", false);
-    vi.spyOn(adapter as any, "submitOrderWithTimeout").mockRejectedValue(
+    vi.spyOn(adapter as unknown as { submitOrderWithTimeout: Function }, "submitOrderWithTimeout").mockRejectedValue(
       new Error("timeout while posting order")
     );
-    vi.spyOn(adapter as any, "sleep").mockResolvedValue(undefined);
+    vi.spyOn(adapter as unknown as { sleep: Function }, "sleep").mockResolvedValue(undefined);
 
     await expect(adapter.submitOrder("MSFT", "SELL", 1)).rejects.toMatchObject({
       errorCode: "TIMEOUT",

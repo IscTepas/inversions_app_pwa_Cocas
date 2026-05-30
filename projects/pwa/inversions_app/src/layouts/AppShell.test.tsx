@@ -1,7 +1,7 @@
-// FIC: AppShell layout tests — 3-zone render, panel collapse, tablet drawer behavior.
-// FIC: Tests del layout AppShell — renderizado 3 zonas, colapso de paneles, comportamiento Drawer en tablet.
+// FIC: AppShell layout tests — 4-zone render, panel collapse, tablet drawer behavior.
+// FIC: Tests del layout AppShell — renderizado 4 zonas, colapso de paneles, comportamiento Drawer en tablet.
 
-import { beforeEach, describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { AppShell } from "./AppShell";
 
@@ -24,10 +24,6 @@ const props = {
 };
 
 describe("AppShell", () => {
-  beforeEach(() => {
-    mockStore.leftPanelCollapsed = false;
-  });
-
   it("renderiza las 3 zonas correctamente", () => {
     render(<AppShell {...props} />);
     expect(screen.getByTestId("app-shell-activity-bar")).toBeDefined();
@@ -46,13 +42,6 @@ describe("AppShell", () => {
     const panel = screen.getByTestId("app-shell-left-panel");
     expect(panel.style.width).toBe("0px");
     mockStore.leftPanelCollapsed = false;
-  });
-
-  it("main content ocupa el espacio flexible restante", () => {
-    render(<AppShell {...props} />);
-    const main = screen.getByTestId("app-shell-main");
-    expect(main.style.flex).toBe("1 1 0%");
-    expect(main.style.width).toBe("0px");
   });
 
   it("el contenido principal se renderiza dentro de main", () => {

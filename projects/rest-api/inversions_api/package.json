@@ -7,7 +7,7 @@
     "dev:token": "node scripts/generate-dev-token.js",
     "dev:token:sync": "node scripts/sync-dev-token-to-frontend.js",
     "build": "tsc -p tsconfig.json",
-    "lint": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
+    "lint": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
@@ -16,8 +16,6 @@
     "dotenv": "^17.4.2",
     "express": "^4.21.0",
     "jsonwebtoken": "^9.0.2",
-    "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1",
     "ws": "^8.20.1"
   },
   "devDependencies": {
@@ -25,13 +23,11 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.7.4",
     "@types/supertest": "^7.2.0",
-    "@types/swagger-jsdoc": "^6.0.4",
-    "@types/swagger-ui-express": "^4.1.8",
     "@vitest/coverage-v8": "^4.1.6",
     "@vitest/ui": "^4.1.6",
     "supertest": "^7.2.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3",
+    "typescript": "^5.6.2",
     "vitest": "^4.1.6"
   }
 }

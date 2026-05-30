@@ -14,7 +14,7 @@ const localStorageMock = (() => {
   };
 })();
 
-Object.defineProperty(global, "localStorage", { value: localStorageMock, writable: true });
+Object.defineProperty(globalThis, "localStorage", { value: localStorageMock, writable: true });
 
 describe("appShell store", () => {
   beforeEach(() => {
@@ -27,7 +27,6 @@ describe("appShell store", () => {
     const { result } = renderHook(() => useAppShellStore());
     expect(result.current.activeSection).toBe("watchlist");
     expect(result.current.leftPanelCollapsed).toBe(false);
-
     expect(result.current.analysisCategory).toBe("technical");
   });
 
@@ -46,8 +45,6 @@ describe("appShell store", () => {
     act(() => { result.current.toggleLeftPanel(); });
     expect(localStorageMock.getItem("inversions.appshell.left-collapsed")).toBe("false");
   });
-
-
 
   it("persiste analysisCategory en localStorage", async () => {
     const { useAppShellStore } = await import("./appShell");
@@ -77,13 +74,11 @@ describe("appShell store", () => {
   it("restaura valores de localStorage al inicializar el store", async () => {
     localStorageMock.setItem("inversions.appshell.section", "strategies");
     localStorageMock.setItem("inversions.appshell.left-collapsed", "true");
-    localStorageMock.setItem("inversions.appshell.chat-collapsed", "true");
     localStorageMock.setItem("inversions.appshell.analysis-cat", "news");
     const { useAppShellStore } = await import("./appShell");
     const { result } = renderHook(() => useAppShellStore());
     expect(result.current.activeSection).toBe("strategies");
     expect(result.current.leftPanelCollapsed).toBe(true);
-
     expect(result.current.analysisCategory).toBe("news");
   });
 });

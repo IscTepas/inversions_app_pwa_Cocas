@@ -3,6 +3,7 @@
 
 import type { InstitutionalAnalysisContract, InstitutionalLiquidity } from "./institutionalContract";
 import type { InstitutionalResolveResult } from "./institutionalDataService";
+import type { RealCandle } from "./yahooChartParser";
 
 // ─── Output types ─────────────────────────────────────────────────────────────
 
@@ -65,7 +66,7 @@ export class InstitutionalZonesEngine {
     request: InstitutionalAnalysisContract,
     preResolvedResult?: InstitutionalResolveResult
   ): Promise<InstitutionalZonesResult> {
-    const candles = this.buildFallbackCandles(request.ticker);
+    const candles = this.extractRealCandles(preResolvedResult) ?? this.buildFallbackCandles(request.ticker);
     const avgVol = candles.reduce((s, c) => s + c.volume, 0) / candles.length;
     const atr = this.computeAtr(candles);
     const referencePrice = candles[candles.length - 1].close;
@@ -116,6 +117,25 @@ export class InstitutionalZonesEngine {
       institutionalScore: instScore,
       analyzedAt: new Date().toISOString(),
     };
+  }
+
+  // FIC: Extract real candles from yahoo_chart observation in preResolvedResult. (EN)
+  // FIC: Extrae velas reales de la observación yahoo_chart en preResolvedResult. (ES)
+  private extractRealCandles(preResolvedResult?: InstitutionalResolveResult): Candle[] | null {
+    const chartObs = preResolvedResult?.observations.find(
+      (o) => o.sourceId === "yahoo_chart" && o.status !== "failed"
+    );
+    if (!chartObs?.rawSourceData) return null;
+    const raw = chartObs.rawSourceData["candles"];
+    if (!Array.isArray(raw) || raw.length < 10) return null;
+    const candles = raw as RealCandle[];
+    return candles.map((c) => ({
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+      volume: c.volume,
+    }));
   }
 
   // FIC: Build 60 deterministic sinusoidal candles — no Math.random, same ticker = same candles. (EN)

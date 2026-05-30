@@ -1,4 +1,8 @@
-import React, { useEffect } from "react";
+// FIC: Content modal — full-content overlay with scroll, close button, no fixed footer buttons. (EN)
+// FIC: Modal de contenido — overlay de contenido completo con scroll, botón de cierre, sin botones fijos. (ES)
+
+import React, { useEffect, useCallback } from "react";
+import { X } from "lucide-react";
 
 interface ContentModalProps {
   isOpen: boolean;
@@ -10,64 +14,71 @@ interface ContentModalProps {
   "data-testid"?: string;
 }
 
+// FIC: ContentModal — use this for information-rich overlays (institutional detail, coverage strategies).
+//      Modal.tsx is for confirmation dialogs only. (EN)
+// FIC: ContentModal — úsalo para overlays con información rica (detalle institucional, estrategias de cobertura).
+//      Modal.tsx es solo para diálogos de confirmación. (ES)
 export function ContentModal({
   isOpen,
   onClose,
   title,
   subtitle,
   children,
-  width,
+  width = "840px",
   "data-testid": testId,
 }: ContentModalProps) {
+  const handleKey = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    },
+    [onClose]
+  );
+
   useEffect(() => {
     if (!isOpen) return;
-
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
-  }, [isOpen, onClose]);
+  }, [isOpen, handleKey]);
 
   if (!isOpen) return null;
 
   return (
     <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
       data-testid={testId}
-      onClick={onClose}
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 1000,
+        zIndex: 1100,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "rgba(0, 0, 0, 0.7)",
+        backgroundColor: "rgba(0,0,0,0.72)",
+        padding: "var(--space-lg)",
       }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        onClick={(e) => e.stopPropagation()}
         style={{
-          background: "var(--color-surface-raised)",
+          backgroundColor: "var(--color-surface)",
           border: "1px solid var(--color-border)",
-          borderRadius: "var(--radius-lg)",
-          padding: "var(--space-xl)",
-          maxWidth: width ?? 720,
-          width: width ? "auto" : "90%",
-          maxHeight: "85vh",
-          overflowY: "auto",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+          borderRadius: "var(--radius-md)",
+          width: "100%",
+          maxWidth: width,
+          maxHeight: "88vh",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
         }}
       >
+        {/* Header */}
         <div
           style={{
             display: "flex",
-            justifyContent: "space-between",
             alignItems: "flex-start",
-            marginBottom: "var(--space-lg)",
+            justifyContent: "space-between",
+            padding: "var(--space-lg)",
+            borderBottom: "1px solid var(--color-border)",
+            flexShrink: 0,
           }}
         >
           <div>
@@ -75,7 +86,7 @@ export function ContentModal({
               style={{
                 margin: 0,
                 fontSize: "var(--font-size-lg)",
-                fontWeight: "var(--font-weight-bold)",
+                fontWeight: 600,
                 color: "var(--color-text)",
               }}
             >
@@ -84,8 +95,8 @@ export function ContentModal({
             {subtitle && (
               <p
                 style={{
-                  margin: "var(--space-xs) 0 0 0",
-                  fontSize: "var(--font-size-xs)",
+                  margin: "var(--space-xs) 0 0",
+                  fontSize: "var(--font-size-sm)",
                   color: "var(--color-text-muted)",
                 }}
               >
@@ -99,17 +110,31 @@ export function ContentModal({
             style={{
               background: "none",
               border: "none",
-              color: "var(--color-text-muted)",
-              fontSize: "var(--font-size-xl)",
               cursor: "pointer",
-              lineHeight: 1,
               padding: "var(--space-xs)",
+              color: "var(--color-text-muted)",
+              borderRadius: "var(--radius-xs)",
+              display: "flex",
+              alignItems: "center",
+              transition: "color var(--duration-fast) var(--easing-standard)",
             }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--color-text)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--color-text-muted)"; }}
           >
-            &times;
+            <X size={18} />
           </button>
         </div>
-        {children}
+
+        {/* Scrollable content area */}
+        <div
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: "var(--space-lg)",
+          }}
+        >
+          {children}
+        </div>
       </div>
     </div>
   );
