@@ -535,6 +535,24 @@ export function SimulationControlPanel({
       .catch(() => { /* user can enter manually */ });
   }, [coverageModalOpen, ticket, coverageParams.currentPrice]);
 
+  useEffect(() => {
+    setTermParams((prev) => ({
+      ...prev,
+      expirationShort: estrategiaFrom,
+      expirationLong: estrategiaTo,
+    }));
+  }, [estrategiaFrom, estrategiaTo]);
+
+  useEffect(() => {
+    if (!termModalOpen || coverageParams.currentPrice > 0) return;
+    getMarketQuotes([ticket])
+      .then((data) => {
+        const q = data.quotes.find((qt) => qt.symbol === ticket.toUpperCase());
+        if (q && q.price > 0) setCoverageParams((prev) => ({ ...prev, currentPrice: q.price }));
+      })
+      .catch(() => {});
+  }, [termModalOpen, ticket, coverageParams.currentPrice]);
+
   const handleEstrategiaChange = (e: string) => {
     setEstrategia(e);
     onStrategyChange?.(e);
@@ -770,6 +788,8 @@ export function SimulationControlPanel({
       <TermStrategyModal
         open={termModalOpen}
         estrategia={estrategia}
+        ticker={ticket}
+        currentPrice={coverageParams.currentPrice}
         params={termParams}
         onChange={setTermParams}
         onClose={() => setTermModalOpen(false)}
