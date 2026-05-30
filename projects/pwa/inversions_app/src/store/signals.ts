@@ -2,6 +2,7 @@
 // FIC: Store global ligero para seleccion de senales y modos runtime del dashboard.
 
 import { useSyncExternalStore } from "react";
+import type { ConfluenceSignalRow } from "../services/signals/confluenceTableApi";
 
 export interface SelectedInstrument {
   symbol: string;
@@ -17,13 +18,33 @@ export interface SelectedSignal {
   metadata?: Record<string, unknown>;
 }
 
-// FIC: Strike selected from OptionChainTable — shared via store so CoverageStrategyModal can read it. (EN)
-// FIC: Strike seleccionado de OptionChainTable — compartido via store para que CoverageStrategyModal lo lea. (ES)
+// FIC: Strike selected from OptionChainTable — shared via store so CoverageStrategyModal can read it.
+// FIC: Strike seleccionado de OptionChainTable — compartido via store para que CoverageStrategyModal lo lea.
 export interface SelectedStrike {
   strike: number;
   type: "call" | "put";
   premium: number;
   iv: number;
+}
+
+export interface SelectedOptionsStrategy {
+  id: "short-put" | "long-put" | "short-call" | "long-call" | "calendar-spread" | "diagonal-spread";
+  name: "Short Put" | "Long Put" | "Short Call" | "Long Call" | "Calendar Spread" | "Diagonal Spread";
+}
+
+export interface OptionsStrategyParams {
+  ticker: string;
+  strikePrice: number;
+  currentPrice: number;
+  premiumPerContract: number;
+  numberOfContracts: number;
+  expirationDate: string;
+  availableCapital: number;
+  assumptions?: {
+    impliedVolatility?: number;
+    timeDecayModel?: "LINEAR" | "EXPONENTIAL";
+    interestRate?: number;
+  };
 }
 
 type RuntimeMode = "online" | "offline";
@@ -33,6 +54,9 @@ interface SignalStoreState {
   selectedInstrument?: SelectedInstrument;
   selectedSignal?: SelectedSignal;
   selectedStrike?: SelectedStrike;
+  selectedOptionsStrategy?: SelectedOptionsStrategy;
+  optionsStrategyParams?: OptionsStrategyParams;
+  termStrategyRows?: ConfluenceSignalRow[];
   runtimeMode: RuntimeMode;
   operationalMode: OperationalMode;
 }
@@ -89,6 +113,18 @@ export function useSignalStore() {
     },
     setSelectedStrike: (strike: SelectedStrike | undefined) => {
       state = { ...state, selectedStrike: strike };
+      emit();
+    },
+    setSelectedOptionsStrategy: (strategy: SelectedOptionsStrategy) => {
+      state = { ...state, selectedOptionsStrategy: strategy };
+      emit();
+    },
+    setOptionsStrategyParams: (params: OptionsStrategyParams) => {
+      state = { ...state, optionsStrategyParams: params };
+      emit();
+    },
+    setTermStrategyRows: (rows: ConfluenceSignalRow[]) => {
+      state.termStrategyRows = rows;
       emit();
     },
     setRuntimeMode: (mode: RuntimeMode) => {

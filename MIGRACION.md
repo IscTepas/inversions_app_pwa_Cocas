@@ -99,7 +99,7 @@ Se agregaron estas líneas a `src/index.ts` del backend:
 - `modules/strategies/coverage/*` (10 archivos: collarEngine, protectivePutEngine, coverageComparator, etc.)
 - ~55 archivos backend con cambios entre versiones
 - ~46 archivos frontend con cambios entre versiones
-
+ 
 ---
 
 ## Verificación post-migración
