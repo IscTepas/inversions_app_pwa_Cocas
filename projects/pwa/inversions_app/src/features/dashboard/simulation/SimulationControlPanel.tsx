@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   BarChart2, BookOpen, TrendingUp, Building2, Newspaper,
   Cpu, Play, ChevronDown, Calendar,
@@ -543,6 +543,14 @@ export function SimulationControlPanel({
     }));
   }, [estrategiaFrom, estrategiaTo]);
 
+  const handleTermDatesCorrected = useCallback(
+    (short: string, long: string) => {
+      setEstrategiaFrom(short);
+      setEstrategiaTo(long);
+    },
+    []
+  );
+
   useEffect(() => {
     if (!termModalOpen || coverageParams.currentPrice > 0) return;
     getMarketQuotes([ticket])
@@ -793,6 +801,7 @@ export function SimulationControlPanel({
         params={termParams}
         onChange={setTermParams}
         onClose={() => setTermModalOpen(false)}
+        onDatesCorrected={handleTermDatesCorrected}
       />
       <CoverageParamsModal
         open={coverageModalOpen}

@@ -200,3 +200,49 @@ La causa raíz eran las **fechas de expiración inválidas**:
 - Si la chain tiene datos, se auto-selecciona el strike ATM
 - Si la chain está vacía, el strike se puede ingresar manualmente en un `<input>`
 - El precio del ticker se obtiene automáticamente sin depender del Coverage Modal
+
+## Cambios realizados (2026-05-30) — Fix: expirationLong +28 días y sincronización del panel
+
+### Problema detectado
+La validación de `expirationLong` buscaba la fecha inmediatamente siguiente a `expirationShort`:
+```ts
+const next = dates.find((d) => d > base);
+```
+Esto provocaba que para un Calendar Spread se eligieran expiraciones consecutivas (ej. lun→mar), sin sentido real.
+
+Además, las fechas corregidas por el modal no se reflejaban en los campos del panel de control ("Estrategia Desde" / "Estrategia Hasta"), causando desincronización.
+
+### Archivos modificados
+
+**`TermStrategyModal.tsx`**
+- Nueva prop `onDatesCorrected?: (short: string, long: string) => void`
+- Validación de `expirationLong` corregida: ahora busca una expiración al menos **28 días después** de `expirationShort`:
+  ```ts
+  const baseDate = new Date(base + "T00:00:00");
+  const minLongDate = new Date(baseDate);
+  minLongDate.setDate(minLongDate.getDate() + 28);
+  const minLongStr = minLongDate.toISOString().slice(0, 10);
+  const next = dates.find((d) => d >= minLongStr);
+  ```
+- Se invoca `onDatesCorrected` después de `onChange` cuando las fechas se corrigen
+
+**`SimulationControlPanel.tsx`**
+- Nuevo `useCallback`: `handleTermDatesCorrected(short, long)` que actualiza `estrategiaFrom` y `estrategiaTo`
+- Se pasa `onDatesCorrected={handleTermDatesCorrected}` al `TermStrategyModal`
+
+### Efecto
+- `expirationLong` ahora elige una fecha de expiración realista (≥28 días después de la corta)
+- Las fechas corregidas se sincronizan automáticamente con el panel de control
+- El usuario ve las fechas actualizadas en los campos "Estrategia Desde" / "Estrategia Hasta"
+
+### Ejemplo con el fix
+```
+Panel: Estrategia Desde = 2026-05-30 (sábado → inválido)
+                      Hasta = 2026-06-29 (lunes → inválido)
+
+1. Modal obtiene expiraciones: [2026-06-01, 2026-06-02, ..., 2026-06-05, ..., 2026-07-03, ...]
+2. expirationShort corregido → 2026-06-01 (1ra fecha válida desde hoy)
+3. expirationLong: base = 2026-06-01, min = 2026-06-29 → busca d >= 2026-06-29
+   → encuentra 2026-07-03 (viernes, +32 días)
+4. Panel se actualiza: Estrategia Desde = 2026-06-01, Estrategia Hasta = 2026-07-03
+```

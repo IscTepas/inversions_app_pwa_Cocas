@@ -22,6 +22,7 @@ interface Props {
   params: TermStrategyParams;
   onChange: (params: TermStrategyParams) => void;
   onClose: () => void;
+  onDatesCorrected?: (short: string, long: string) => void;
 }
 
 function midpoint(bid: number, ask: number): number {
@@ -44,7 +45,7 @@ function isoToday(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function TermStrategyModal({ open, estrategia, ticker, currentPrice, params, onChange, onClose }: Props) {
+export function TermStrategyModal({ open, estrategia, ticker, currentPrice, params, onChange, onClose, onDatesCorrected }: Props) {
   const [shortChain, setShortChain] = useState<OptionChainRow[]>([]);
   const [longChain, setLongChain] = useState<OptionChainRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -78,12 +79,20 @@ export function TermStrategyModal({ open, estrategia, ticker, currentPrice, para
 
         if (dates.length > 0 && !dates.includes(params.expirationLong)) {
           const base = updates.expirationShort || params.expirationShort;
-          const next = dates.find((d) => d > base);
+          const baseDate = new Date(base + "T00:00:00");
+          const minLongDate = new Date(baseDate);
+          minLongDate.setDate(minLongDate.getDate() + 28);
+          const minLongStr = minLongDate.toISOString().slice(0, 10);
+          const next = dates.find((d) => d >= minLongStr);
           if (next) updates.expirationLong = next;
         }
 
         if (Object.keys(updates).length > 0) {
           onChange({ ...params, ...updates });
+          onDatesCorrected?.(
+            updates.expirationShort || params.expirationShort,
+            updates.expirationLong || params.expirationLong
+          );
         }
       })
       .catch(() => {
