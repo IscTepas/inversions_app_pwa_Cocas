@@ -28,6 +28,14 @@ export interface CalendarRequest {
   riskFreeRate?: number;
   ivCurve?: Array<{ dte: number; iv: number }>;
   monteCarlo?: { iterations: number; distribution: "normal" | "lognormal" };
+  riskTolerance?: "BAJO" | "MEDIO" | "ALTO";
+}
+
+/** Mapea tolerancia de riesgo a config de Monte Carlo */
+function mcConfigFromTolerance(riskTolerance?: string): { iterations: number; distribution: "normal" | "lognormal" } {
+  if (riskTolerance === "BAJO")  return { iterations: 500,  distribution: "normal" };
+  if (riskTolerance === "ALTO")  return { iterations: 2000, distribution: "lognormal" };
+  return { iterations: 1000, distribution: "normal" }; // MEDIO default
 }
 
 export const calendarSpreadRouter = Router();
@@ -95,7 +103,7 @@ function handleCalendarSpread(variant?: CalendarVariant) {
       const result = engine.analyze();
 
       const simulation = new TermSimulationEngine(contract, engine, null, body.riskFreeRate ?? 0.05, body.ivCurve ?? []);
-      const mcConfig = body.monteCarlo ?? { iterations: 1000, distribution: "normal" as const };
+      const mcConfig = body.monteCarlo ?? mcConfigFromTolerance(body.riskTolerance);
       const simResult = simulation.simulate(undefined, mcConfig);
 
       const report = new TermReportEngine(result, null, simResult, null);

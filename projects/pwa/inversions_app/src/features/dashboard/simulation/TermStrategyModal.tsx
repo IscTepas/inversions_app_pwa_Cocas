@@ -10,6 +10,8 @@ export interface TermStrategyParams {
   expirationLong: string;
   premiumShort: number;
   premiumLong: number;
+  shortIv: number;
+  longIv: number;
   contracts: number;
   riskFreeRate: number;
 }
@@ -143,18 +145,45 @@ export function TermStrategyModal({ open, estrategia, ticker, currentPrice, para
         const updates: Partial<TermStrategyParams> = {};
 
         if (up > 0) {
+          const isDiagonal = estrategia.includes("DIAGONAL");
+
           if (params.strikeShort === 0) {
             const atm = closestAtm(shortRows, up);
             if (atm) {
               updates.strikeShort = atm.strike;
               updates.premiumShort = getPremium(atm, params.optionStyle);
+              const iv = params.optionStyle === "CALL" ? atm.callIV : atm.putIV;
+              if (iv > 0) updates.shortIv = iv;
             }
           }
-          if (params.strikeLong === 0) {
-            const atm = closestAtm(longRows, up);
-            if (atm) {
-              updates.strikeLong = atm.strike;
-              updates.premiumLong = getPremium(atm, params.optionStyle);
+
+          const shortStrike = updates.strikeShort ?? params.strikeShort;
+
+          if (isDiagonal) {
+            // Para Diagonal: forzar long strike diferente al short
+            const needsDifferentLong = params.strikeLong === 0 || params.strikeLong === shortStrike;
+            if (needsDifferentLong && shortStrike > 0 && longRows.length > 0) {
+              const sorted = [...longRows].sort((a, b) => a.strike - b.strike);
+              const longRow = sorted.find((r) => r.strike > shortStrike) ?? sorted[sorted.length - 1] ?? null;
+              if (longRow) {
+                updates.strikeLong = longRow.strike;
+                updates.premiumLong = getPremium(longRow, params.optionStyle);
+                const iv = params.optionStyle === "CALL" ? longRow.callIV : longRow.putIV;
+                if (iv > 0) updates.longIv = iv;
+              }
+            }
+          } else {
+            // Para Calendar: forzar que ambos strikes sean iguales
+            const needsSameStrike = params.strikeLong === 0 || params.strikeLong !== shortStrike;
+            if (needsSameStrike && shortStrike > 0) {
+              const atm = closestAtm(longRows, shortStrike);
+              const row = longRows.find((r) => r.strike === shortStrike) ?? atm;
+              if (row) {
+                updates.strikeLong = shortStrike;
+                updates.premiumLong = getPremium(row, params.optionStyle);
+                const iv = params.optionStyle === "CALL" ? row.callIV : row.putIV;
+                if (iv > 0) updates.longIv = iv;
+              }
             }
           }
         }
@@ -189,6 +218,8 @@ export function TermStrategyModal({ open, estrategia, ticker, currentPrice, para
       if (atm) {
         updates.strikeShort = atm.strike;
         updates.premiumShort = getPremium(atm, params.optionStyle);
+        const iv = params.optionStyle === "CALL" ? atm.callIV : atm.putIV;
+        if (iv > 0) updates.shortIv = iv;
       }
     }
     if (params.strikeLong === 0) {
@@ -196,6 +227,8 @@ export function TermStrategyModal({ open, estrategia, ticker, currentPrice, para
       if (atm) {
         updates.strikeLong = atm.strike;
         updates.premiumLong = getPremium(atm, params.optionStyle);
+        const iv = params.optionStyle === "CALL" ? atm.callIV : atm.putIV;
+        if (iv > 0) updates.longIv = iv;
       }
     }
 
@@ -208,12 +241,16 @@ export function TermStrategyModal({ open, estrategia, ticker, currentPrice, para
     const chain = leg === "short" ? shortChain : longChain;
     const strikeField = leg === "short" ? "strikeShort" : "strikeLong" as const;
     const premiumField = leg === "short" ? "premiumShort" : "premiumLong" as const;
+    const ivField = leg === "short" ? "shortIv" : "longIv" as const;
+    const defaultIv = leg === "short" ? 0.25 : 0.30;
     const row = chain.find((r) => r.strike === strike);
     if (!row) return;
+    const rawIv = params.optionStyle === "CALL" ? row.callIV : row.putIV;
     onChange({
       ...params,
       [strikeField]: strike,
       [premiumField]: getPremium(row, params.optionStyle),
+      [ivField]: rawIv > 0 ? rawIv : defaultIv,
     });
   };
 
@@ -221,11 +258,19 @@ export function TermStrategyModal({ open, estrategia, ticker, currentPrice, para
     const update: Partial<TermStrategyParams> = { optionStyle: style };
     if (params.strikeShort > 0) {
       const row = shortChain.find((r) => r.strike === params.strikeShort);
-      if (row) update.premiumShort = getPremium(row, style);
+      if (row) {
+        update.premiumShort = getPremium(row, style);
+        const iv = style === "CALL" ? row.callIV : row.putIV;
+        if (iv > 0) update.shortIv = iv;
+      }
     }
     if (params.strikeLong > 0) {
       const row = longChain.find((r) => r.strike === params.strikeLong);
-      if (row) update.premiumLong = getPremium(row, style);
+      if (row) {
+        update.premiumLong = getPremium(row, style);
+        const iv = style === "CALL" ? row.callIV : row.putIV;
+        if (iv > 0) update.longIv = iv;
+      }
     }
     onChange({ ...params, ...update });
   };

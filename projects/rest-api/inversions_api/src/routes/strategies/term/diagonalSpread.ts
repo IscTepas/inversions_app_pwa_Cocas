@@ -26,6 +26,21 @@ export interface DiagonalRequest {
   riskFreeRate?: number;
   ivCurve?: Array<{ dte: number; iv: number }>;
   monteCarlo?: { iterations: number; distribution: "normal" | "lognormal" };
+  riskTolerance?: "BAJO" | "MEDIO" | "ALTO";
+}
+
+/** Mapea tolerancia a config de Monte Carlo */
+function mcConfigFromTolerance(rt?: string): { iterations: number; distribution: "normal" | "lognormal" } {
+  if (rt === "BAJO")  return { iterations: 500,  distribution: "normal" };
+  if (rt === "ALTO")  return { iterations: 2000, distribution: "lognormal" };
+  return { iterations: 1000, distribution: "normal" };
+}
+
+/** Mapea tolerancia a parámetros del DiagonalEngine (thetaThreshold, minDteForRoll) */
+function engineParamsFromTolerance(rt?: string): { thetaResidualThreshold: number; minDteForRoll: number } {
+  if (rt === "BAJO")  return { thetaResidualThreshold: 1.0, minDteForRoll: 14 }; // conservador: ajustar antes
+  if (rt === "ALTO")  return { thetaResidualThreshold: 0.2, minDteForRoll: 3  }; // agresivo: ajustar tarde
+  return { thetaResidualThreshold: 0.5, minDteForRoll: 7 };                        // moderado: default
 }
 
 export const diagonalSpreadRouter = Router();
@@ -96,13 +111,14 @@ function handleDiagonalSpread(variant?: DiagonalVariant) {
       const netEntryCost = sortedLegs[1].premium * sortedLegs[1].contracts
         - sortedLegs[0].premium * sortedLegs[0].contracts;
 
+      const { thetaResidualThreshold, minDteForRoll } = engineParamsFromTolerance(body.riskTolerance);
       const engine = new DiagonalSpreadEngine(
-        contract, body.riskFreeRate ?? 0.05, body.ivCurve ?? []
+        contract, body.riskFreeRate ?? 0.05, body.ivCurve ?? [], thetaResidualThreshold, minDteForRoll
       );
       const result = engine.analyze();
 
       const simulation = new TermSimulationEngine(contract, null, engine, body.riskFreeRate ?? 0.05, body.ivCurve ?? []);
-      const mcConfig = body.monteCarlo ?? { iterations: 1000, distribution: "normal" as const };
+      const mcConfig = body.monteCarlo ?? mcConfigFromTolerance(body.riskTolerance);
       const simResult = simulation.simulate(undefined, mcConfig);
 
       const report = new TermReportEngine(null, result, simResult, null);

@@ -32,6 +32,7 @@ export function MainDashboard() {
   const [simulationVerdict, setSimulationVerdict] = useState<{ verdict?: unknown; score?: number; degraded?: boolean } | null>(null);
   const [activeSimulationStrategy, setActiveSimulationStrategy] = useState("IRON_CONDOR");
   const [coverageRequest, setCoverageRequest] = useState<{ params: CoverageModalParams; kind: string } | null>(null);
+  const [termResult, setTermResult] = useState<any | null>(null);
   const [institutionalCoreWasActive, setInstitutionalCoreWasActive] = useState(false);
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [selectedStrikeData, setSelectedStrikeData] = useState<{
@@ -66,6 +67,10 @@ export function MainDashboard() {
     (params: CoverageModalParams, kind: string) => setCoverageRequest({ params, kind }),
     []
   );
+
+  const handleTermResult = useCallback((data: any) => {
+    setTermResult(data);
+  }, []);
 
   // FIC: Writes selected strike to global store so CoverageStrategyModal can read it from anywhere. (EN)
   // FIC: Escribe el strike seleccionado en el store global para que CoverageStrategyModal lo lea desde cualquier lugar. (ES)
@@ -240,6 +245,7 @@ export function MainDashboard() {
         onExecute={handleSimulationExecute}
         onStrategyChange={setActiveSimulationStrategy}
         onCoverageParamsConfirmed={handleCoverageConfirmed}
+        onTermResult={handleTermResult}
       />
 
       {/* ── Simulation verdict */}
@@ -418,6 +424,7 @@ export function MainDashboard() {
           ticker={selectedSymbol}
           activeStrategy={activeSimulationStrategy}
           coverageRequest={coverageRequest}
+          termResult={termResult}
         />
       )}
 
